@@ -16,8 +16,8 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 
 | | |
 |---|---|
-| **Done** | Phases 1, 2, 3, 4a, 4b, 5, 6 (all verified end to end) |
-| **Next** | Phase 7 — Auth pages and user context |
+| **Done** | Phases 1, 2, 3, 4a, 4b, 5, 6, 7 (all verified end to end) |
+| **Next** | Phase 8 — Cart (API + drawer) |
 
 **Verified vs. assumed — read this before trusting any ✅ below:**
 
@@ -29,9 +29,10 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 - The shop page is complete: sidebar filters, search, sort, responsive grid, loading skeletons and an empty state, all driven by the URL.
 - The product detail page is complete: gallery, size grid, quantity stepper, expandable sections.
 - **`useCart` is a placeholder** — nothing persists. Phase 8 replaces its body with a real `POST /api/cart`; the signature is meant to survive that.
-- Auth is live on the server: signup, login, logout, `/me`, Postgres-backed sessions, helmet and rate limiting. **No UI for it yet** — that's Phase 7.
+- Auth works end to end: server routes plus login/signup pages, an account menu, and `ProtectedRoute` gating checkout and orders.
+- **`useCart` is still a placeholder** and the cart badge is still hardcoded to 0. Phase 8 replaces both.
 - Phase 4b also finished **Phase 10's URL-state, loading and no-results tasks** early — see the strikethroughs there.
-- **Nothing in Phase 7+ has been started.** Those checkboxes are plans, not results.
+- **Nothing in Phase 8+ has been started.** Those checkboxes are plans, not results.
 
 **Actual installed versions** (keep this table honest — it is the first thing a new contributor or agent reads):
 
@@ -669,7 +670,7 @@ Also verified beyond the checklist:
 
 ---
 
-## Phase 7: Frontend — Auth Pages & Context
+## Phase 7: Frontend — Auth Pages & Context ✅
 
 **Goal:** Build signup/login pages and set up a user context for the app.
 
@@ -700,21 +701,67 @@ Also verified beyond the checklist:
 - [ ] Add data-testid to form inputs, submit buttons, error messages
 
 **Files created or changed:**
-- `client/src/contexts/UserContext.tsx`
-- `client/src/pages/LoginPage.tsx`
-- `client/src/pages/SignupPage.tsx`
-- `client/src/components/ProtectedRoute.tsx`
-- `client/src/components/Header.tsx` (update with user menu)
-- `client/src/App.tsx` (add UserProvider, route to login/signup)
+- `client/src/contexts/userContext.ts` (context + `useUser`), `UserProvider.tsx` (provider)
+- `client/src/components/AuthForm.tsx` (shared by both pages)
+- `client/src/pages/LoginPage.tsx`, `SignupPage.tsx`
+- `client/src/components/ProtectedRoute.tsx`, `AccountMenu.tsx`
+- `client/src/components/Header.tsx`, `client/src/App.tsx`, `client/src/api.ts`
 
-**Done when:**
-- Visit `/signup` and create an account with email + password
-- Redirected to home page; header shows "Logout" and account icon
-- Refresh page → user is still logged in (session persisted)
-- Click "Logout" → header shows "Login / Signup" again
-- Try signing up with same email → error message appears
-- Try logging in with wrong password → error message
-- Create a second account and log in → header shows different email
+> **Decisions worth knowing:**
+>
+> - **Auth state is three-valued — `loading | authenticated | anonymous` —
+>   not a nullable user.** With only `user | null`, "not signed in" and
+>   "we haven't asked yet" are indistinguishable, and `ProtectedRoute` would
+>   bounce *every refresh* on a protected page to the login screen before
+>   `/me` resolves. This is the single most important detail in the phase.
+> - **`ProtectedRoute` is a layout route**, so one gate wraps checkout and
+>   orders instead of repeating the check per route.
+> - **It records where it turned you away** (`state.from`), and login sends
+>   you back there rather than dumping you on the home page.
+> - **Login and signup share `AuthForm`.** They differ by one field and the
+>   wording; keeping them separate would let the validation rules drift apart
+>   from each other and from the server's.
+> - **The form surfaces the server's message verbatim** rather than inventing
+>   its own. The server is what knows whether this was a duplicate email, bad
+>   credentials, or a rate limit.
+> - **Client-side validation is for fast feedback only** — the server
+>   validates independently, and that's the check that counts.
+> - **Sign-out clears local state even if the request fails.** Leaving the UI
+>   signed in after someone asked to leave is worse than a stale server row.
+>
+> **Deviation:** the plan put `useUser()` in `UserContext.tsx`. Exporting a
+> hook and a component from one module breaks React fast refresh (oxlint flags
+> it), so the context and hook live in `contexts/userContext.ts` and the
+> provider in `contexts/UserProvider.tsx`.
+
+**Done when:** ✅ verified in the browser against the running stack
+- [x] `/signup` creates an account
+- [x] Redirected away from the form; header shows the signed-in state
+- [x] Refresh → still logged in (session persisted, no redirect flash)
+- [x] Log out → menu shows "Log in / Sign up" again
+- [x] Signing up with an existing email → "An account with that email already exists"
+- [x] Logging in with a wrong password → "Email or password is incorrect"
+- [x] Second account (`second@example.com`) → header shows the different email
+
+Also verified beyond the checklist:
+
+- [x] Visiting `/orders` signed out redirects to `/login`, and signing in returns you **to `/orders`**, not the home page
+- [x] After a full page reload on `/orders`, the page renders without bouncing — the `loading` state does its job
+- [x] Signup rejects mismatched passwords client-side ("Passwords do not match.") before any request
+- [x] The submit button re-enables after a failed attempt (no stuck pending state)
+- [x] Account menu shows the signed-in address, Order history and Log out; signed out it shows Log in and Sign up
+- [x] `GET /api/auth/me` agrees with what the header displays
+- [x] Build and oxlint clean
+
+> ⚠️ **How this was verified.** Browser input degraded partway through the
+> session: clicks stopped focusing inputs even at measured element centres
+> (the same failure that broke `resize_window` in 4b/5). Early checks — login,
+> the protected-route redirect, session persistence — used real typing and
+> clicks. The later ones (signup submission, duplicate-email and wrong-password
+> errors, log out) were driven with dispatched DOM events through React's own
+> value setter, which exercises the same handlers but not the OS-level input
+> path. Nothing was assumed; it's just worth a manual pass over the signup form
+> and the account dropdown, and these are natural Playwright cases in B3.
 
 **Resume skill:** React Context, session persistence, form validation
 
@@ -1263,6 +1310,6 @@ Decisions made once so they aren't re-litigated each phase:
 
 ---
 
-**Next up: Phase 7 — Auth pages and user context.** The auth API works; it just
-has no interface. Phase 7 adds the login and signup screens and the React
-context that keeps the signed-in user available across the app.
+**Next up: Phase 8 — Cart.** Everything it needs is in place: a signed-in user,
+`requireAuth` on the server, and a `useCart` placeholder whose signature was
+written to survive being swapped for the real thing.

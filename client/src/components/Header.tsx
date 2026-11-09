@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
+import AccountMenu from './AccountMenu';
 
 /**
  * Nav links are filter presets on /jerseys, not separate pages — see the
@@ -70,14 +71,7 @@ export default function Header({ cartCount = 0 }: HeaderProps) {
             <SearchIcon />
           </Link>
 
-          <Link
-            to="/login"
-            className="icon-button"
-            aria-label="Account"
-            data-testid="account-link"
-          >
-            <UserIcon />
-          </Link>
+          <AccountMenu />
 
           {/* Phase 8 replaces this with the cart drawer toggle. */}
           <Link
@@ -133,24 +127,6 @@ function SearchIcon() {
     >
       <circle cx="11" cy="11" r="7" />
       <path d="m16.5 16.5 4 4" />
-    </svg>
-  );
-}
-
-function UserIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" />
     </svg>
   );
 }

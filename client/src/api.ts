@@ -1,4 +1,4 @@
-import type { Product, ProductFilters } from './types';
+import type { Product, ProductFilters, PublicUser } from './types';
 
 /**
  * All requests use relative /api/... paths. In dev the Vite proxy forwards
@@ -87,4 +87,31 @@ export function getProduct(id: number | string): Promise<Product> {
 
 export function getHealth(): Promise<{ ok: boolean; db: boolean }> {
   return request<{ ok: boolean; db: boolean }>('/health');
+}
+
+/* Auth ------------------------------------------------------------------- */
+
+export function signup(
+  email: string,
+  password: string
+): Promise<PublicUser> {
+  return request<PublicUser>('/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function login(email: string, password: string): Promise<PublicUser> {
+  return request<PublicUser>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function logout(): Promise<void> {
+  return request<void>('/auth/logout', { method: 'POST' });
+}
+
+export function getCurrentUser(): Promise<PublicUser> {
+  return request<PublicUser>('/auth/me');
 }
