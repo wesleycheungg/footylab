@@ -16,8 +16,8 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 
 | | |
 |---|---|
-| **Done** | Phases 1, 2, 3, 4a, 4b, 5 (all verified end to end) |
-| **Next** | Phase 6 — Authentication (signup, login, sessions) |
+| **Done** | Phases 1, 2, 3, 4a, 4b, 5, 6 (all verified end to end) |
+| **Next** | Phase 7 — Auth pages and user context |
 
 **Verified vs. assumed — read this before trusting any ✅ below:**
 
@@ -29,8 +29,9 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 - The shop page is complete: sidebar filters, search, sort, responsive grid, loading skeletons and an empty state, all driven by the URL.
 - The product detail page is complete: gallery, size grid, quantity stepper, expandable sections.
 - **`useCart` is a placeholder** — nothing persists. Phase 8 replaces its body with a real `POST /api/cart`; the signature is meant to survive that.
+- Auth is live on the server: signup, login, logout, `/me`, Postgres-backed sessions, helmet and rate limiting. **No UI for it yet** — that's Phase 7.
 - Phase 4b also finished **Phase 10's URL-state, loading and no-results tasks** early — see the strikethroughs there.
-- **Nothing in Phase 6+ has been started.** Those checkboxes are plans, not results.
+- **Nothing in Phase 7+ has been started.** Those checkboxes are plans, not results.
 
 **Actual installed versions** (keep this table honest — it is the first thing a new contributor or agent reads):
 
@@ -587,7 +588,7 @@ Also verified beyond the checklist:
 
 ---
 
-## Phase 6: Authentication — Signup & Login
+## Phase 6: Authentication — Signup & Login ✅
 
 **Goal:** Build user signup/login with bcrypt-hashed passwords and express-session cookies.
 
@@ -598,47 +599,71 @@ Also verified beyond the checklist:
 - Protected routes and middleware
 
 **Tasks:**
-- [ ] Install dependencies: `bcrypt`, `express-session`, `connect-pg-simple` (session store)
-- [ ] Create `server/src/middleware/auth.ts`
-  - `requireAuth` middleware — checks if user is logged in; returns 401 if not
-  - Express session configuration using PostgreSQL store
-- [ ] Create `server/src/routes/auth.ts`
-  - POST `/api/auth/signup` — body: `{email, password}`
-    - Validate email format (simple regex)
-    - Validate password (min 8 chars)
-    - Check if email already exists
-    - Hash password with bcrypt (10 salt rounds)
-    - Insert user into database
-    - Set session cookie
-    - Return user object (id, email)
-  - POST `/api/auth/login` — body: `{email, password}`
-    - Look up user by email
-    - Compare password with hash
-    - Set session cookie
-    - Return user object
-  - POST `/api/auth/logout` — clears session
-  - GET `/api/auth/me` — returns logged-in user or 401
-- [ ] Update database schema: add the session table for express-session
-  - **Use `connect-pg-simple`'s own `table.sql` verbatim** (ships in the package) rather than hand-writing the DDL — it expects an exact `sid`/`sess`/`expire` shape and an index on `expire`
-  - Note the seed's `TRUNCATE` list deliberately excludes it
-- [ ] Read `SESSION_SECRET` from env (already in `.env.example`); fail fast at boot if it's missing in production
-- [ ] Cookie config: `httpOnly: true`, `sameSite: 'lax'`, `secure` in production only
-- [ ] Hardening (cheap, and reviewers look for it): add `helmet`, and rate-limit `POST /api/auth/login` + `/signup`
-- [ ] Wire up routes to Express app
+- [x] Install `bcrypt`, `express-session`, `connect-pg-simple`, `helmet`, `express-rate-limit`
+- [x] Create `server/src/middleware/auth.ts` — session config, `requireAuth`, `regenerateSession`
+- [x] Create `server/src/routes/auth.ts` — signup, login, logout, me
+- [x] Update database schema: session table for express-session
+- [x] Read `SESSION_SECRET` from env; throw at boot if missing in production
+- [x] Cookie config: `httpOnly`, `sameSite: 'lax'`, `secure` in production only
+- [x] `helmet` + a shared rate limit on `/signup` and `/login`
+- [x] Wire up routes to Express app
 
 **Files created or changed:**
-- `server/src/middleware/auth.ts`
-- `server/src/routes/auth.ts`
-- `server/src/db/schema.sql` (add session table)
-- `server/src/index.ts` (add session middleware, helmet, wire up auth routes)
+- `server/src/middleware/auth.ts`, `server/src/routes/auth.ts`
+- `server/src/db/schema.sql` (session table)
+- `server/src/app.ts` (helmet, session middleware, auth routes)
 
-**Done when:**
-- `curl -X POST http://localhost:3000/api/auth/signup -H 'Content-Type: application/json' -d '{"email":"test@example.com","password":"password123"}'` creates a user and returns `{id, email}`
-- Running again with same email returns error (409 or 400)
-- `curl -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' -d '{"email":"test@example.com","password":"password123"}'` returns `{id, email}` and sets a session cookie
-- `curl http://localhost:3000/api/auth/me` (with cookie) returns the user
-- `curl http://localhost:3000/api/auth/me` (without cookie) returns 401
-- `curl -X POST http://localhost:3000/api/auth/logout` (with cookie) clears the session
+> **Security decisions, and why — these are the parts worth reviewing:**
+>
+> - **Login never reveals whether an email is registered.** "No such user" and
+>   "wrong password" return the identical message, *and* an unknown email is
+>   still compared against a dummy hash so the two paths take the same time.
+>   Skipping the comparison would leak the account list through response timing.
+> - **The session id is regenerated on every sign-in** (`regenerateSession`).
+>   Without it, a session id captured before login still works afterwards —
+>   session fixation.
+> - **Signup uses `INSERT ... ON CONFLICT DO NOTHING`, not SELECT-then-INSERT.**
+>   Checking first leaves a race where two concurrent signups both pass, and the
+>   UNIQUE constraint then surfaces as a 500 instead of a clean 409.
+> - **Emails are normalized to lowercase.** Otherwise `Test@x.com` and
+>   `test@x.com` become separate accounts and the UNIQUE constraint won't object.
+> - **`saveUninitialized: false`**, so anonymous browsing doesn't write a session
+>   row per request.
+> - **Logout clears the cookie as well as destroying the row** — otherwise the
+>   browser keeps sending a sid that no longer resolves.
+> - **bcrypt cost 12, not the 10 in the original draft.** Both clear the OWASP
+>   floor; 12 costs a few hundred ms per login and roughly quadruples the cost of
+>   an offline cracking run.
+>
+> **Deviation:** `connect-pg-simple`'s `table.sql` could not be used verbatim.
+> Its bare `CREATE TABLE` and separate `ADD CONSTRAINT` both fail on the second
+> run, and `schema.sql` is re-executed by every `db:setup`. The column shape and
+> `expire` index are preserved exactly; the primary key is inlined and the
+> obsolete `WITH (OIDS=FALSE)` dropped (OIDs no longer exist in Postgres 12+).
+
+**Done when:** ✅ all verified against the running server
+- [x] `POST /api/auth/signup` creates a user → `{"id":1,"email":"test@example.com"}` (201)
+- [x] Same email again → 409 with a clear message
+- [x] `POST /api/auth/login` → `{id, email}` and sets `footylab.sid`
+- [x] `GET /api/auth/me` with cookie → the user
+- [x] `GET /api/auth/me` without cookie → 401
+- [x] `POST /api/auth/logout` → 204, and `/me` afterwards → 401
+
+Also verified beyond the checklist:
+
+- [x] **Session id rotates on login** — captured before/after, confirmed different
+- [x] Exactly **one** session row after repeated logins: rotation destroys the old row rather than orphaning it
+- [x] Session payload contains only `userId` plus cookie metadata — no email, no hash
+- [x] Stored password is `$2b$12$…`, 60 chars — bcrypt at cost 12, never plaintext
+- [x] `  TEST@Example.COM  ` collides with `test@example.com` → 409 (trimmed and lowercased)
+- [x] Wrong password and unknown email return **byte-identical** responses
+- [x] Validation: bad email → 400, short password → 400, empty body → 400
+- [x] Rate limit returns 429 after 20 attempts in 15 minutes
+- [x] Cookie is `HttpOnly`; helmet sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, HSTS
+
+> Note: the rate limiter is **in-memory**, so it resets on restart and would not
+> be shared across multiple server instances. Fine for this project; a real
+> deployment behind more than one process needs a shared store.
 
 **Resume skill:** Authentication, bcrypt, session management, validation
 
@@ -1238,6 +1263,6 @@ Decisions made once so they aren't re-litigated each phase:
 
 ---
 
-**Next up: Phase 6 — Authentication.** The whole browse flow is built and
-verified; everything past this point (cart, checkout, orders) needs a logged-in
-user, so sessions are the gate.
+**Next up: Phase 7 — Auth pages and user context.** The auth API works; it just
+has no interface. Phase 7 adds the login and signup screens and the React
+context that keeps the signed-in user available across the app.

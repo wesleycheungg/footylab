@@ -75,3 +75,23 @@ CREATE TABLE IF NOT EXISTS order_items (
 
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items(product_id);
+
+-- Session store for express-session via connect-pg-simple.
+--
+-- The column shape (sid / sess / expire, plus an index on expire) is what
+-- connect-pg-simple's bundled table.sql defines and what it queries against,
+-- so it must not be changed. Two mechanical differences from that file,
+-- because this schema is re-run on every db:setup and must be idempotent:
+-- the PRIMARY KEY is inlined rather than added by a separate ALTER TABLE
+-- (ADD CONSTRAINT fails on a second run), and WITH (OIDS=FALSE) is dropped
+-- since OIDs no longer exist in Postgres 12+.
+--
+-- Deliberately absent from the seed's TRUNCATE list: wiping the catalog
+-- should not sign everybody out.
+CREATE TABLE IF NOT EXISTS "session" (
+  "sid" varchar NOT NULL COLLATE "default" PRIMARY KEY,
+  "sess" json NOT NULL,
+  "expire" timestamp(6) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
