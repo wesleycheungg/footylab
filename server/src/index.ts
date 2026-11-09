@@ -1,27 +1,13 @@
-import express from 'express';
-import pool from './db/pool.js';
+import { createApp } from './app.js';
 
-const app = express();
+const app = createApp();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
-
-app.get('/', (req, res) => {
-  res.json({ ok: true });
-});
-
-// CI polls this before starting E2E tests, so it reports DB reachability
-// rather than just "the process is up".
-app.get('/api/health', async (_req, res) => {
-  let db = false;
-  try {
-    await pool.query('SELECT 1');
-    db = true;
-  } catch {
-    db = false;
-  }
-  res.status(db ? 200 : 503).json({ ok: true, db });
-});
+if (!process.env.DATABASE_URL) {
+  console.warn(
+    'DATABASE_URL is not set — API routes will fail. Copy .env.example to .env.'
+  );
+}
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
