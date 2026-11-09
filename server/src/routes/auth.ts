@@ -9,6 +9,7 @@ import {
   HttpError,
 } from '../middleware/errorHandler.js';
 import type { PublicUser, User } from '../types.js';
+import { EMAIL_PATTERN } from '../validation.js';
 
 const router = Router();
 
@@ -21,11 +22,6 @@ const BCRYPT_ROUNDS = 12;
 
 const MIN_PASSWORD_LENGTH = 8;
 
-/**
- * Deliberately loose. Strict email regexes reject valid addresses, and the
- * only real proof an address works is sending mail to it.
- */
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Compared against when no user exists, so a request for an unknown email

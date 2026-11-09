@@ -1,4 +1,14 @@
-import type { Cart, Product, ProductFilters, PublicUser, Size } from './types';
+import type {
+  Cart,
+  Order,
+  OrderDetail,
+  OrderSummary,
+  Product,
+  ProductFilters,
+  PublicUser,
+  ShippingDetails,
+  Size,
+} from './types';
 
 /**
  * All requests use relative /api/... paths. In dev the Vite proxy forwards
@@ -149,4 +159,26 @@ export function updateCartItem(
 
 export function removeCartItem(itemId: number): Promise<Cart> {
   return request<Cart>(`/cart/${itemId}`, { method: 'DELETE' });
+}
+
+/* Orders ------------------------------------------------------------------ */
+
+/**
+ * Takes shipping details only. Card fields are validated in the browser
+ * for format and never leave it — there is no payment processing here, so
+ * sending a card number would create risk for no benefit.
+ */
+export function placeOrder(shipping: ShippingDetails): Promise<Order> {
+  return request<Order>('/orders', {
+    method: 'POST',
+    body: JSON.stringify(shipping),
+  });
+}
+
+export function getOrders(): Promise<OrderSummary[]> {
+  return request<OrderSummary[]>('/orders');
+}
+
+export function getOrder(id: number | string): Promise<OrderDetail> {
+  return request<OrderDetail>(`/orders/${id}`);
 }

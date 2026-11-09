@@ -60,6 +60,68 @@ export interface Cart {
   total_cents: number;
 }
 
+/** Timestamps arrive as ISO strings over JSON — see the note at the top. */
+export interface Order {
+  id: number;
+  user_id: number;
+  subtotal_cents: number;
+  shipping_cents: number;
+  total_cents: number;
+  shipping_name: string;
+  shipping_email: string;
+  shipping_address: string;
+  shipping_city: string;
+  shipping_state: string;
+  shipping_zip: string;
+  created_at: string;
+}
+
+export interface OrderLine {
+  id: number;
+  product_id: number;
+  size: Size;
+  quantity: number;
+  /** What was actually paid, not today's price. */
+  price_cents: number;
+  name: string;
+  team: string;
+  league: string;
+  kit_type: KitType;
+  primary_color: string;
+  trim_color: string;
+}
+
+export interface OrderSummary {
+  id: number;
+  created_at: string;
+  subtotal_cents: number;
+  shipping_cents: number;
+  total_cents: number;
+  item_count: number;
+}
+
+export interface OrderDetail extends Order {
+  items: OrderLine[];
+}
+
+/** The shipping fields an order needs. Card data is never included. */
+export interface ShippingDetails {
+  name: string;
+  email: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+}
+
+export function formatOrderDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
 export const EMPTY_CART: Cart = {
   items: [],
   item_count: 0,

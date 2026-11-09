@@ -3,9 +3,11 @@ import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import { CartProvider } from './contexts/CartProvider';
 import { UserProvider } from './contexts/UserProvider';
+import CheckoutPage from './pages/CheckoutPage';
 import LoginPage from './pages/LoginPage';
 import NotFoundPage from './pages/NotFoundPage';
-import PlaceholderPage from './pages/PlaceholderPage';
+import OrderDetailPage from './pages/OrderDetailPage';
+import OrderHistoryPage from './pages/OrderHistoryPage';
 import ProductPage from './pages/ProductPage';
 import ShopPage from './pages/ShopPage';
 import SignupPage from './pages/SignupPage';
@@ -37,22 +39,11 @@ export default function App() {
             {/* Layout route: one gate wrapping everything that needs an
                 account, rather than repeating the check per route. */}
             <Route element={<ProtectedRoute />}>
-              <Route
-                path="/checkout"
-                element={<PlaceholderPage title="Checkout" phase="Phase 9" />}
-              />
-              <Route
-                path="/orders"
-                element={
-                  <PlaceholderPage title="Order history" phase="Phase 9" />
-                }
-              />
-              <Route
-                path="/orders/:id"
-                element={
-                  <PlaceholderPage title="Order detail" phase="Phase 9" />
-                }
-              />
+              <Route path="/checkout" element={<CheckoutPage />} />
+              <Route path="/orders" element={<OrderHistoryPage />} />
+              {/* Also serves the post-checkout confirmation, via
+                  location.state.justPlaced. */}
+              <Route path="/orders/:id" element={<OrderDetailPage />} />
             </Route>
 
               <Route path="*" element={<NotFoundPage />} />

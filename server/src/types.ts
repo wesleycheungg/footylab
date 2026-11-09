@@ -69,6 +69,36 @@ export interface OrderItem {
   price_cents: number;
 }
 
+/** An order_items row joined to its product, for display. */
+export interface OrderLine {
+  id: number;
+  product_id: number;
+  size: Size;
+  quantity: number;
+  /** What was actually paid, not today's price. */
+  price_cents: number;
+  name: string;
+  team: string;
+  league: string;
+  kit_type: KitType;
+  primary_color: string;
+  trim_color: string;
+}
+
+/** Row shape for the order history list. */
+export interface OrderSummary {
+  id: number;
+  created_at: Date;
+  subtotal_cents: number;
+  shipping_cents: number;
+  total_cents: number;
+  item_count: number;
+}
+
+export interface OrderDetail extends Order {
+  items: OrderLine[];
+}
+
 /**
  * A cart row joined to its product. The client renders straight from this,
  * so it carries the product fields the drawer needs rather than making the

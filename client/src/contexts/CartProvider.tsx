@@ -132,6 +132,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
     })();
   }, [status, user, applyServerCart]);
 
+  const refresh = useCallback(async () => {
+    if (!user) return;
+    try {
+      const next = await api.getCart();
+      confirmed.current = next;
+      setEntry({ userId: user.id, cart: next });
+    } catch {
+      // Non-fatal: the next interaction reconciles anyway.
+    }
+  }, [user]);
+
   const addItem = useCallback(
     async (productId: number, size: Size, quantity = 1) => {
       if (status !== 'authenticated' || !user) {
@@ -243,6 +254,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       addItem,
       updateItem,
       removeItem,
+      refresh,
       dismissError,
     }),
     [
@@ -255,6 +267,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       addItem,
       updateItem,
       removeItem,
+      refresh,
       dismissError,
     ]
   );
