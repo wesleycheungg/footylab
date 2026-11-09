@@ -16,8 +16,8 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 
 | | |
 |---|---|
-| **Done** | Phases 1–9 (all verified end to end) |
-| **Next** | Phase 10 — Search, filters and UI polish |
+| **Done** | Phases 1–10 (all verified end to end) |
+| **Next** | Phase 11 — OpenAPI / Swagger spec |
 
 **Verified vs. assumed — read this before trusting any ✅ below:**
 
@@ -33,7 +33,7 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 - The cart is real: `/api/cart` CRUD, a slide-out drawer, optimistic updates, and server-side persistence across sessions.
 - Checkout and orders are live: transactional order creation, order history and detail. `server/src/money.ts` is the shipping rule's only home — both the cart and orders import it.
 - Phase 4b also finished **Phase 10's URL-state, loading and no-results tasks** early — see the strikethroughs there.
-- **Nothing in Phase 10+ has been started.** Those checkboxes are plans, not results. Note Phase 10's first three tasks were already completed back in 4b.
+- **Nothing in Phase 11+ has been started.** Those checkboxes are plans, not results.
 
 **Actual installed versions** (keep this table honest — it is the first thing a new contributor or agent reads):
 
@@ -1016,7 +1016,7 @@ Also verified beyond the checklist:
 
 ---
 
-## Phase 10: Frontend — Additional Features
+## Phase 10: Frontend — Additional Features ✅
 
 **Goal:** Add search, filters, sort on the shop page; polish UI.
 
@@ -1031,30 +1031,57 @@ Also verified beyond the checklist:
   immediately, so 4b made the URL authoritative rather than adding a second copy
   to remove later. `/jerseys?league=Premier+League&sort=price-asc` already works,
   including back/forward.
-- [ ] Add search box to Header (global search)
-  - On submit, navigate to `/jerseys?q=<query>` and clear other filters (or keep league?)
+- [x] Add search box to Header (global search)
+  - **Decision: submitting clears the other filters.** The spec left this open
+    ("or keep league?"). Carrying a league or size over from wherever the
+    shopper happened to be is how you get a search that mysteriously returns
+    nothing; the header search is a fresh intent, and the sidebar is right
+    there to narrow it again.
+  - Collapses to an icon until used; opens a full-width bar under the header,
+    focuses the input, seeds it from `?q=`, and closes on Escape or Cancel
 - [x] ~~Add loading state to ShopPage~~ — done in 4b (skeleton cards, not a spinner: they hold the grid's shape so the layout doesn't jump)
 - [x] ~~Add "no results" message if filters return 0 products~~ — done in 4b
-- [ ] Polish ProductCard: add hover shadow, smooth color transitions
-- [ ] Add smooth scroll behavior
-- [ ] Verify all touch targets are 44px minimum on mobile
-- [ ] Test responsive layout across breakpoints (mobile, tablet, desktop)
+- [x] Polish ProductCard: hover shadow and smooth transitions (also on `:focus-within`, so keyboard users get the same affordance)
+- [x] Add smooth scroll behaviour — scoped to `prefers-reduced-motion: no-preference`, since the existing reduced-motion rule covers animations and transitions but not scrolling
+- [x] Verify all touch targets are 44px minimum on mobile
+- [x] Test responsive layout across breakpoints
 
 **Files created or changed:**
-- `client/src/pages/ShopPage.tsx` (update to use URL params)
-- `client/src/components/Header.tsx` (add search to header)
-- `client/src/components/ProductCard.tsx` (polish hover states)
-- `client/src/hooks/useQueryParams.ts` (helper for URL param syncing)
+- `client/src/components/HeaderSearch.tsx` (**new**)
+- `client/src/components/Header.tsx` (swap the dead search link for it)
+- `client/src/styles/global.css` (search bar, card hover, smooth scroll, touch targets)
 
-**Done when:**
-- Load `/jerseys` → all 20 products shown
-- Type "Arsenal" in search, press Enter → URL changes to `?q=Arsenal`, page shows only Arsenal products
-- Click "Premier League" league chip → URL shows `?league=Premier%20League`, page filters accordingly
-- Combine filters: select "Premier League" AND "S" size → URL shows both query params, results filtered
-- Click "Clear all filters" → URL reverts to `/jerseys`, all products shown
-- Click a product card → goes to product detail page
-- "Back" button in browser returns to shop page with same filters active
-- On mobile, layout is single-column; product grid is responsive
+> **`useQueryParams.ts` was not created.** The plan listed it as a helper for
+> URL syncing, but 4b made the URL authoritative and reads it with
+> `useSearchParams` directly. A wrapper would add a layer without removing
+> one.
+
+**Done when:** ✅ verified in the browser
+- [x] `/jerseys` → all 20 products
+- [x] Header search for "arsenal" → `?q=arsenal`, 2 products, panel closes, sidebar box reflects the term
+- [x] League chip → `?league=Premier+League`, filtered
+- [x] Combined filters → both params in the URL, results narrowed
+- [x] "Clear all filters" → URL back to `/jerseys`, 20 products
+- [x] Product card → detail page
+- [x] **Back button restores the previous filter state** (`?q=arsenal&league=Premier+League`)
+- [x] Responsive: grid 1 → 2 → 4 columns, sidebar stacks below 900px
+
+**Touch-target audit (134 interactive elements):** found and fixed the logo
+(31px → 44), the skip link (41 → 44), and the quick-add `.size-chip` (36px,
+and permanently visible on touch since there's no hover to reveal it). The
+remaining sub-44px elements are fine by inspection: filter checkboxes are 18px
+but their `.checkbox-row` label is the 44px target, and `.product-card__link`
+is 20px but its stretched `::after` makes the whole 298px card clickable.
+Breadcrumb and text-style links are raised under `@media (pointer: coarse)`
+rather than making the desktop UI chunky.
+
+> ⚠️ **Responsive was verified from the live CSSOM, not by resizing.** The
+> Chrome window is maximized at 3200px and `resize_window` reports success
+> without changing the viewport — the same limitation hit in 4b and 5. The
+> rules were read back from the running stylesheet: `.product-grid` 1fr →
+> `repeat(2,1fr)` at 600 → `repeat(4,1fr)` at 1100; `.shop` 1fr → `220px 1fr`
+> at 900; `.header__nav` none → flex at 900 with the mobile nav inverse;
+> `.footer__columns` 1 → 2 → 4. Still worth one real phone pass in Phase 13.
 
 **Resume skill:** URL state management, React Router, UX polish
 
@@ -1419,6 +1446,5 @@ Decisions made once so they aren't re-litigated each phase:
 
 ---
 
-**Next up: Phase 10 — Search, filters and polish.** Much of it is already done
-(URL state, loading skeletons, the no-results state all landed in 4b), so what
-remains is the header's global search and a polish pass.
+**Next up: Phase 11 — OpenAPI spec.** Every endpoint the spec must describe is
+built and verified: auth, products, cart, orders, health.

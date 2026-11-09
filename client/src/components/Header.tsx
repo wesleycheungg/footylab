@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useCart } from '../contexts/cartContext';
 import AccountMenu from './AccountMenu';
+import HeaderSearch from './HeaderSearch';
 
 /**
  * Nav links are filter presets on /jerseys, not separate pages — see the
@@ -58,16 +59,7 @@ export default function Header() {
         </nav>
 
         <div className="header__actions">
-          {/* Phase 10 turns this into a real search field. For now it just
-              lands on the shop page, where 4b's filters live. */}
-          <Link
-            to="/jerseys"
-            className="icon-button"
-            aria-label="Search jerseys"
-            data-testid="search-link"
-          >
-            <SearchIcon />
-          </Link>
+          <HeaderSearch />
 
           <AccountMenu />
 
@@ -112,24 +104,6 @@ export default function Header() {
 
 /* Inline 20px icons — no icon library, to keep the bundle and the
    dependency list small. aria-hidden because each has a labelled parent. */
-
-function SearchIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      aria-hidden="true"
-    >
-      <circle cx="11" cy="11" r="7" />
-      <path d="m16.5 16.5 4 4" />
-    </svg>
-  );
-}
 
 function BagIcon() {
   return (
