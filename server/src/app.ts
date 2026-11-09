@@ -4,6 +4,7 @@ import pool from './db/pool.js';
 import { createSessionMiddleware } from './middleware/auth.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import authRouter from './routes/auth.js';
+import cartRouter from './routes/cart.js';
 import productsRouter from './routes/products.js';
 
 /**
@@ -48,6 +49,7 @@ export function createApp() {
   });
 
   app.use('/api/auth', authRouter);
+  app.use('/api/cart', cartRouter);
   app.use('/api/products', productsRouter);
 
   // Order matters: unmatched /api routes 404 as JSON, then the terminal

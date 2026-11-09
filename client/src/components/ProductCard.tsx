@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useCart } from '../contexts/cartContext';
 import {
   SIZES,
   formatPrice,
@@ -30,6 +31,7 @@ function badgeFor(product: Product): string | null {
 }
 
 export default function ProductCard({ product }: { product: Product }) {
+  const { addItem } = useCart();
   const badge = badgeFor(product);
   const unavailable = new Set(soldOutSizes(product));
 
@@ -49,9 +51,9 @@ export default function ProductCard({ product }: { product: Product }) {
           </span>
         )}
 
-        {/* Revealed on hover/focus-within. Phase 8 wires these to
-            addItem(); for now they carry the chosen size to the detail
-            page, where Phase 5 can preselect it. */}
+        {/* Revealed on hover/focus-within. These add one of that size
+            straight to the cart; signed out, addItem() stashes the intent
+            and routes to login, which replays it afterwards. */}
         <div className="product-card__sizes" data-testid="quick-add">
           {SIZES.map((size) => {
             const soldOut = unavailable.has(size);
@@ -71,15 +73,20 @@ export default function ProductCard({ product }: { product: Product }) {
             }
 
             return (
-              <Link
+              <button
                 key={size}
-                to={`/products/${product.id}?size=${size}`}
+                type="button"
                 className="size-chip"
-                aria-label={`${product.name}, size ${size}`}
+                aria-label={`Add ${product.name}, size ${size}, to cart`}
+                onClick={() => {
+                  // Swallowed deliberately: the drawer surfaces failures,
+                  // and an unhandled rejection here would be noise.
+                  void addItem(product.id, size).catch(() => {});
+                }}
                 data-testid={`quick-add-${size}`}
               >
                 {size}
-              </Link>
+              </button>
             );
           })}
         </div>

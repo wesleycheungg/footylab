@@ -5,7 +5,8 @@ import JerseyImage, { type JerseyView } from '../components/JerseyImage';
 import QuantityStepper from '../components/QuantityStepper';
 import SizeGrid from '../components/SizeGrid';
 import { ApiError, getProduct } from '../api';
-import { useCart } from '../hooks/useCart';
+import { useCart } from '../contexts/cartContext';
+import { useUser } from '../contexts/userContext';
 import {
   SIZES,
   formatPrice,
@@ -41,6 +42,7 @@ export default function ProductPage() {
 function ProductDetail({ id }: { id: string }) {
   const [searchParams] = useSearchParams();
   const { addItem } = useCart();
+  const { status } = useUser();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -113,10 +115,21 @@ function ProductDetail({ id }: { id: string }) {
 
   async function handleAddToCart() {
     if (!product || !size) return;
-    await addItem({ productId: product.id, size, quantity });
-    setConfirmation(
-      `${quantity} × ${product.name}, size ${size}, added to your cart.`
-    );
+
+    try {
+      await addItem(product.id, size, quantity);
+    } catch {
+      // The drawer reports the failure; don't claim success here.
+      return;
+    }
+
+    // Signed-out visitors get redirected to log in, so only confirm when
+    // the item actually landed in a cart.
+    if (status === 'authenticated') {
+      setConfirmation(
+        `${quantity} × ${product.name}, size ${size}, added to your cart.`
+      );
+    }
   }
 
   return (

@@ -69,6 +69,39 @@ export interface OrderItem {
   price_cents: number;
 }
 
+/**
+ * A cart row joined to its product. The client renders straight from this,
+ * so it carries the product fields the drawer needs rather than making the
+ * browser fetch each product separately.
+ */
+export interface CartLine {
+  /** cart_items.id — what PATCH and DELETE address. */
+  id: number;
+  product_id: number;
+  size: Size;
+  quantity: number;
+  name: string;
+  team: string;
+  league: string;
+  kit_type: KitType;
+  price_cents: number;
+  primary_color: string;
+  trim_color: string;
+  sold_out_sizes: string;
+  /** This size sold out after the item was added. */
+  unavailable: boolean;
+}
+
+/** The shape every cart endpoint returns — see loadCart() for why. */
+export interface Cart {
+  items: CartLine[];
+  item_count: number;
+  has_unavailable: boolean;
+  subtotal_cents: number;
+  shipping_cents: number;
+  total_cents: number;
+}
+
 export type ProductSort = 'featured' | 'price-asc' | 'price-desc';
 
 export const PRODUCT_SORTS: readonly ProductSort[] = [
