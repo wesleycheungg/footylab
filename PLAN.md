@@ -16,15 +16,17 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 
 | | |
 |---|---|
-| **Done** | Phase 1, Phase 2 (both verified end to end) |
-| **Next** | Phase 3 — Products API |
+| **Done** | Phases 1, 2, 3 (all verified end to end) |
+| **Next** | Phase 4a — App shell |
 
 **Verified vs. assumed — read this before trusting any ✅ below:**
 
 - Phase 2 is **fully verified against a live database.** Schema applied, 20 products seeded with ids 1–20, re-seed confirmed idempotent, CHECK constraints confirmed to reject bad data.
 - Docker is installed and `footylab-postgres` runs on :5432 (`docker compose up -d --wait`).
 - The server builds, boots, loads `.env`, and answers `GET /` and `GET /api/health` (`{"ok":true,"db":true}`). The Vite dev proxy is confirmed to reach Express.
-- **Nothing in Phase 3+ has been started.** Those checkboxes are plans, not results.
+- Phase 3's products endpoints are **verified against real data**, including filter combinations, input validation, LIKE escaping, and a parameterized-query injection probe.
+- **The client is still the Vite starter template.** Phase 4a replaces it.
+- **Nothing in Phase 4+ has been started.** Those checkboxes are plans, not results.
 
 **Actual installed versions** (keep this table honest — it is the first thing a new contributor or agent reads):
 
@@ -297,7 +299,7 @@ psql -h localhost -U postgres -d footylab -c "SELECT count(*) FROM products"
 
 ---
 
-## Phase 3: API — Products Endpoint
+## Phase 3: API — Products Endpoint ✅
 
 **Goal:** Build the products list and detail endpoints with filtering and sorting.
 
@@ -308,33 +310,51 @@ psql -h localhost -U postgres -d footylab -c "SELECT count(*) FROM products"
 - TypeScript types for API responses
 
 **Tasks:**
-- [ ] Create `server/src/types.ts` with types: `User`, `Product`, `CartItem`, `Order`, `OrderItem`
-- [ ] Create `server/src/routes/products.ts`
+- [x] Create `server/src/types.ts` with types: `User`, `Product`, `CartItem`, `Order`, `OrderItem`
+  - Plus `Size`/`KitType`/`ProductSort` unions and their runtime arrays, so query validation and the DB CHECK constraints can't drift apart
+- [x] Create `server/src/routes/products.ts`
   - GET `/api/products` with query params: `team`, `league`, `kit`, `size`, `q` (search), `sort`
-    - Build dynamic WHERE clauses for filters
-    - Search by name, team, or league (case-insensitive)
-    - Sort by featured (default, order by id), price-asc, price-desc
-    - Filter by size — exclude products with that size in `sold_out_sizes`, using the
-      delimiter-padded predicate from the Data Model section (so `'S'` doesn't match `'XS'`)
+    - Dynamic WHERE built from a `placeholder()` helper, so parameter numbering stays correct for any combination of filters
+    - Search by name, team, or league (case-insensitive `ILIKE`); LIKE wildcards in user input are escaped so `q=%` matches literally rather than everything
+    - Sort by featured (default, order by id), price-asc, price-desc — **always with `id` as tiebreaker**, since many jerseys share a price and tied rows would otherwise come back in arbitrary order (a flaky-test source in B3)
+    - Filter by size — excludes products with that size in `sold_out_sizes`, using the delimiter-padded predicate from the Data Model section
     - Flat `LIMIT 50`. No pagination — there are only 20 products
-  - GET `/api/products/:id` — single product by ID; return 404 if not found
-- [ ] Create middleware to parse JSON, handle errors
-- [x] `GET /api/health` → `{ok, db}` — already implemented in `server/src/index.ts`
-- [ ] Wire up routes to Express app
+    - Unknown `kit`/`size`/`sort` values → 400 with the allowed list, rather than silently ignoring the filter
+  - GET `/api/products/:id` — single product by ID; 404 if not found, 400 for a non-numeric id
+- [x] Create middleware to parse JSON, handle errors
+  - `HttpError` + `asyncHandler`, because Express 4 doesn't forward rejected promises — without the wrapper a failed query hangs the request instead of returning 500
+- [x] `GET /api/health` → `{ok, db}`
+- [x] Wire up routes to Express app
 
 **Files created or changed:**
 - `server/src/types.ts`
 - `server/src/routes/products.ts`
 - `server/src/middleware/errorHandler.ts`
-- `server/src/index.ts` (wire up routes)
+- `server/src/app.ts` (**new** — builds the app without listening)
+- `server/src/index.ts` (listens only)
 
-**Done when:**
-- `curl 'http://localhost:3000/api/products'` returns JSON array of ~20 products
-- `curl 'http://localhost:3000/api/products?league=Premier%20League'` filters by league
-- `curl 'http://localhost:3000/api/products?q=Arsenal'` searches by team name
-- `curl 'http://localhost:3000/api/products/1'` returns single product with all fields
-- `curl 'http://localhost:3000/api/products/999'` returns 404
-- All prices are integers (cents), colors are hex codes
+> **Why `app.ts` is split from `index.ts`:** Phase B2 mounts the app with
+> supertest, which needs an app that hasn't bound a port. Doing the split now
+> avoids refactoring every route import later.
+
+**Done when:** ✅ all verified against the live database on 2026-11-09
+- [x] `curl 'http://localhost:3000/api/products'` → JSON array of 20 products
+- [x] `?league=Premier%20League` → 7 products (Arsenal, Liverpool, Man City, Man United)
+- [x] `?q=Arsenal` → 2 products (Arsenal Home, Arsenal Away)
+- [x] `/api/products/1` → single product, all fields
+- [x] `/api/products/999` → 404
+- [x] All prices are integers (cents), colors are hex codes
+
+Also verified beyond the checklist:
+
+- [x] `sort=price-asc` / `price-desc` return correctly ordered prices
+- [x] `size=S` returns 18, excluding the two products with S sold out
+- [x] **`L` vs `XL` collision:** a product with `sold_out_sizes='XL'` is still returned by `size=L` and correctly excluded by `size=XL` — this is the case the padded predicate exists for, and no seed row exercises it
+- [x] `kit=Goalkeeper`, `sort=bogus`, `size=XXL`, `/products/abc` → 400 with a useful message
+- [x] Unmatched `/api/*` → 404 JSON, not an HTML error page
+- [x] `q=%` and `q=_` → 0 results (wildcards escaped, not matching everything)
+- [x] Filters are case-insensitive and combine (`?league=premier%20league&kit=home` → 3)
+- [x] `?team=Arsenal'; DROP TABLE products;--` → `[]`, and `products` still has 20 rows
 
 **Resume skill:** Express API design, SQL filtering, TypeScript types
 
@@ -1124,5 +1144,5 @@ Decisions made once so they aren't re-litigated each phase:
 
 ---
 
-**Next up: Phase 3 — Products API.** Phases 1 and 2 are verified against a live
-database, so the products endpoints have real data to query.
+**Next up: Phase 4a — App shell.** The products API is live and verified, so the
+frontend has real data to render. Start by replacing the Vite starter template.
