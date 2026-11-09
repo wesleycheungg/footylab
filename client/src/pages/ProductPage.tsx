@@ -1,55 +1,83 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import ExpandableSection from '../components/ExpandableSection';
+import JerseyImage, { type JerseyView } from '../components/JerseyImage';
+import QuantityStepper from '../components/QuantityStepper';
+import SizeGrid from '../components/SizeGrid';
 import { ApiError, getProduct } from '../api';
-import { formatPrice, soldOutSizes, type Product } from '../types';
+import { useCart } from '../hooks/useCart';
+import {
+  SIZES,
+  formatPrice,
+  isSoldOut,
+  soldOutSizes,
+  type Product,
+  type Size,
+} from '../types';
 
-/**
- * Phase 4a stub — proves the route param and getProduct() work, including
- * the 404 path. Phase 5 builds the real detail page (swatches, size grid,
- * quantity stepper, expandable sections).
- */
-interface LoadedProduct {
-  /** Which id this result belongs to, so a stale one is easy to spot. */
-  id: string;
-  product?: Product;
-  error?: string;
+const VIEWS: { id: JerseyView; label: string }[] = [
+  { id: 'front', label: 'Front' },
+  { id: 'back', label: 'Back' },
+  { id: 'collar', label: 'Collar' },
+  { id: 'cuff', label: 'Cuff' },
+];
+
+function parseSize(value: string | null): Size | null {
+  if (!value) return null;
+  return (SIZES as readonly string[]).includes(value) ? (value as Size) : null;
 }
 
+/**
+ * Keyed by product id so that navigating between products remounts the
+ * detail view. Without the key, a size or quantity chosen on one jersey
+ * would carry over to the next one.
+ */
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
-  const [loaded, setLoaded] = useState<LoadedProduct | null>(null);
+  if (!id) return null;
+  return <ProductDetail key={id} id={id} />;
+}
+
+function ProductDetail({ id }: { id: string }) {
+  const [searchParams] = useSearchParams();
+  const { addItem } = useCart();
+
+  const [product, setProduct] = useState<Product | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [chosenSize, setChosenSize] = useState<Size | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  const [view, setView] = useState<JerseyView>('front');
+  const [confirmation, setConfirmation] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!id) return;
     let active = true;
 
     getProduct(id)
-      .then((product) => {
-        if (active) setLoaded({ id, product });
+      .then((result) => {
+        if (active) setProduct(result);
       })
       .catch((err: unknown) => {
         if (!active) return;
-        const error =
+        setError(
           err instanceof ApiError && err.status === 404
             ? 'That jersey does not exist.'
             : err instanceof Error
               ? err.message
-              : 'Failed to load';
-        setLoaded({ id, error });
+              : 'Failed to load'
+        );
       });
 
-    // Guards against a slow response for the previous id resolving after
-    // navigation, and against setting state post-unmount.
     return () => {
       active = false;
     };
   }, [id]);
 
-  // Derived during render rather than reset in the effect: a synchronous
-  // setState on id change would trigger a second render pass for nothing.
-  const isStale = !loaded || loaded.id !== id;
-  const product = isStale ? null : loaded.product;
-  const error = isStale ? null : loaded.error;
+  // Auto-dismiss the confirmation so it doesn't linger over the page.
+  useEffect(() => {
+    if (!confirmation) return;
+    const timer = setTimeout(() => setConfirmation(null), 4000);
+    return () => clearTimeout(timer);
+  }, [confirmation]);
 
   if (error) {
     return (
@@ -73,7 +101,23 @@ export default function ProductPage() {
     );
   }
 
-  const unavailable = soldOutSizes(product);
+  const unavailable = new Set(soldOutSizes(product));
+  const allGone = isSoldOut(product);
+
+  // The shop page's quick-add links carry ?size=M, so arriving from a card
+  // preselects what the shopper already clicked. Derived rather than
+  // synced into state with an effect; an explicit choice overrides it.
+  const requested = parseSize(searchParams.get('size'));
+  const size =
+    chosenSize ?? (requested && !unavailable.has(requested) ? requested : null);
+
+  async function handleAddToCart() {
+    if (!product || !size) return;
+    await addItem({ productId: product.id, size, quantity });
+    setConfirmation(
+      `${quantity} × ${product.name}, size ${size}, added to your cart.`
+    );
+  }
 
   return (
     <div className="container page">
@@ -85,46 +129,166 @@ export default function ProductPage() {
         <span aria-current="page">{product.name}</span>
       </nav>
 
-      <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-        {product.league} · {product.kit_type} kit
-      </p>
-      <h1>{product.name}</h1>
-      <p style={{ marginTop: 'var(--space-2)', fontSize: '1.25rem' }}>
-        {formatPrice(product.price_cents)}
-      </p>
+      <div className="product">
+        {/* Gallery ------------------------------------------------------ */}
+        <div className="product__gallery">
+          <div className="product__stage">
+            <JerseyImage
+              name={product.name}
+              primaryColor={product.primary_color}
+              trimColor={product.trim_color}
+              view={view}
+              className="product__image"
+            />
+          </div>
 
-      <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
-        <span
-          aria-label={`Primary color ${product.primary_color}`}
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: '50%',
-            background: product.primary_color,
-            border: '1px solid var(--color-border)',
-          }}
-        />
-        <span
-          aria-label={`Trim color ${product.trim_color}`}
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: '50%',
-            background: product.trim_color,
-            border: '1px solid var(--color-border)',
-          }}
-        />
-      </div>
+          <div
+            className="product__thumbs"
+            role="group"
+            aria-label="Jersey views"
+          >
+            {VIEWS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={`product__thumb ${
+                  view === option.id ? 'product__thumb--active' : ''
+                }`}
+                aria-pressed={view === option.id}
+                onClick={() => setView(option.id)}
+                data-testid={`view-${option.id}`}
+              >
+                <JerseyImage
+                  name={product.name}
+                  primaryColor={product.primary_color}
+                  trimColor={product.trim_color}
+                  view={option.id}
+                  className="product__thumb-image"
+                />
+                <span className="product__thumb-label">{option.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
-      {unavailable.length > 0 && (
-        <p style={{ marginTop: 'var(--space-4)', color: 'var(--color-text-muted)' }}>
-          Sold out: {unavailable.join(', ')}
-        </p>
-      )}
+        {/* Buy panel ---------------------------------------------------- */}
+        <div className="product__panel">
+          <p className="product__eyebrow">
+            {product.league} · {product.kit_type} kit
+          </p>
+          <h1 className="product__name">{product.name}</h1>
+          <p className="product__price" data-testid="product-price">
+            {formatPrice(product.price_cents)}
+          </p>
 
-      <div className="placeholder">
-        Size grid, quantity stepper and Add to Cart arrive in{' '}
-        <strong>Phase 5</strong>.
+          <div className="product__field">
+            <h2 className="product__label">Kit colours</h2>
+            {/* Informational, not a variant picker: the schema stores one
+                colourway per product, so a selectable swatch would imply
+                choices that don't exist. */}
+            <ul className="swatches" data-testid="swatches">
+              <li className="swatch">
+                <span
+                  className="swatch__dot"
+                  style={{ background: product.primary_color }}
+                />
+                <span className="swatch__label">
+                  Primary <code>{product.primary_color}</code>
+                </span>
+              </li>
+              <li className="swatch">
+                <span
+                  className="swatch__dot"
+                  style={{ background: product.trim_color }}
+                />
+                <span className="swatch__label">
+                  Trim <code>{product.trim_color}</code>
+                </span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="product__field">
+            <div className="product__label-row">
+              <h2 className="product__label">Size</h2>
+              {unavailable.size > 0 && !allGone && (
+                <span className="product__hint">
+                  Sold out: {[...unavailable].join(', ')}
+                </span>
+              )}
+            </div>
+            <SizeGrid
+              selected={size}
+              soldOut={unavailable}
+              onSelect={setChosenSize}
+            />
+          </div>
+
+          <div className="product__field">
+            <h2 className="product__label" id="quantity-label">
+              Quantity
+            </h2>
+            <QuantityStepper value={quantity} onChange={setQuantity} />
+          </div>
+
+          <button
+            type="button"
+            className="btn btn--primary product__add"
+            disabled={!size || allGone}
+            onClick={handleAddToCart}
+            data-testid="add-to-cart"
+          >
+            {allGone
+              ? 'Sold out'
+              : size
+                ? `Add to cart — ${formatPrice(product.price_cents * quantity)}`
+                : 'Select a size'}
+          </button>
+
+          {/* role="status" announces the confirmation without stealing
+              focus from the button. */}
+          <p className="product__confirmation" role="status">
+            {confirmation}
+          </p>
+
+          <div className="product__details">
+            <ExpandableSection title="Details" defaultOpen>
+              <p>
+                Match-weight {product.kit_type.toLowerCase()} shirt in{' '}
+                {product.team}&apos;s colours, with a ribbed collar and
+                contrast trim at the cuffs and hem. Recycled polyester with
+                mesh ventilation panels.
+              </p>
+              <p>Printed club crest. Machine wash cold, hang to dry.</p>
+            </ExpandableSection>
+
+            <ExpandableSection title="Fit &amp; sizing">
+              <p>
+                Athletic cut, true to size. If you&apos;re between sizes or
+                want room to layer, size up.
+              </p>
+              <p>
+                Chest, to fit: S 36–38&quot;, M 39–41&quot;, L 42–44&quot;, XL
+                45–47&quot;.
+              </p>
+            </ExpandableSection>
+
+            <ExpandableSection title="Shipping &amp; returns">
+              <p>
+                Free standard shipping on orders over $150, otherwise a flat
+                $10. Orders ship within two business days.
+              </p>
+              <p>
+                Free returns for 30 days on unworn items with tags attached.
+              </p>
+            </ExpandableSection>
+          </div>
+
+          <p className="product__disclaimer">
+            Portfolio project — no real products are sold and no payment is
+            taken.
+          </p>
+        </div>
       </div>
     </div>
   );

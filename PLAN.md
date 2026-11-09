@@ -16,8 +16,8 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 
 | | |
 |---|---|
-| **Done** | Phases 1, 2, 3, 4a, 4b (all verified end to end) |
-| **Next** | Phase 5 — Product detail page |
+| **Done** | Phases 1, 2, 3, 4a, 4b, 5 (all verified end to end) |
+| **Next** | Phase 6 — Authentication (signup, login, sessions) |
 
 **Verified vs. assumed — read this before trusting any ✅ below:**
 
@@ -27,9 +27,10 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 - Phase 3's products endpoints are **verified against real data**, including filter combinations, input validation, LIKE escaping, and a parameterized-query injection probe.
 - The app shell is live and checked in a real browser: routing, header, footer, API client, and the 404 paths.
 - The shop page is complete: sidebar filters, search, sort, responsive grid, loading skeletons and an empty state, all driven by the URL.
-- **`ProductPage` is still a deliberate stub.** It fetches real data and handles 404, but Phase 5 replaces its body.
+- The product detail page is complete: gallery, size grid, quantity stepper, expandable sections.
+- **`useCart` is a placeholder** — nothing persists. Phase 8 replaces its body with a real `POST /api/cart`; the signature is meant to survive that.
 - Phase 4b also finished **Phase 10's URL-state, loading and no-results tasks** early — see the strikethroughs there.
-- **Nothing in Phase 5+ has been started.** Those checkboxes are plans, not results.
+- **Nothing in Phase 6+ has been started.** Those checkboxes are plans, not results.
 
 **Actual installed versions** (keep this table honest — it is the first thing a new contributor or agent reads):
 
@@ -511,7 +512,7 @@ Also verified beyond the checklist:
 
 ---
 
-## Phase 5: Frontend — Product Detail Page
+## Phase 5: Frontend — Product Detail Page ✅
 
 **Goal:** Build the product detail page with color swatches, size picker, quantity stepper, and cart button.
 
@@ -522,42 +523,65 @@ Also verified beyond the checklist:
 - Expandable sections
 
 **Tasks:**
-- [ ] Create `client/src/pages/ProductPage.tsx`
-  - Fetch product by ID from URL param
-  - Left side: large image (JerseyImage component), 4 thumbnails below (just smaller versions)
-  - Right side panel:
-    - League + kit type as small text (e.g., "Premier League · Home kit")
-    - Product name (large)
-    - Price ($90)
-    - **Kit color:** label + 3 color swatches (primary, trim, and a secondary if applicable) — allow clicking to "select" but for now just visual
-    - **Size:** grid of 4 buttons (S, M, L, XL); grayed out if in sold_out_sizes; clicking a button sets selected size
-    - **Quantity:** label + minus/plus stepper (start at 1, min 1, max 20)
-    - **Add to Cart button:** full width, disabled until size is selected, green accent color; clicking adds item to cart and shows toast
-    - **Details** (expandable section): generic copy about the jersey
-    - **Fit & Sizing** (expandable): size guide copy
-    - **Shipping & Returns** (expandable): shipping and returns copy
-- [ ] Create `client/src/components/SizeGrid.tsx` — displays S, M, L, XL buttons
-- [ ] Create `client/src/components/QuantityStepper.tsx` — minus/plus buttons and input
-- [ ] Create `client/src/components/ExpandableSection.tsx` — click to toggle content
-- [ ] Create `client/src/hooks/useCart.ts` (initially just a placeholder)
-- [ ] Add data-testid to size buttons, quantity inputs, and add-to-cart button
+- [x] Create `client/src/pages/ProductPage.tsx`
+  - Fetch product by ID from URL param; 404 handled
+  - Left: large jersey image with **four real views** below — Front, Back, Collar, Cuff
+  - Right panel (sticky on desktop): league + kit eyebrow, name, price, kit colours, size grid, quantity stepper, Add to cart, three expandable sections
+- [x] Create `client/src/components/SizeGrid.tsx`
+- [x] Create `client/src/components/QuantityStepper.tsx`
+- [x] Create `client/src/components/ExpandableSection.tsx`
+- [x] Create `client/src/hooks/useCart.ts` (placeholder; signature designed to survive Phase 8)
+- [x] Add data-testid to size buttons, quantity inputs, add-to-cart button, views and swatches
 
 **Files created or changed:**
 - `client/src/pages/ProductPage.tsx`
-- `client/src/components/SizeGrid.tsx`
-- `client/src/components/QuantityStepper.tsx`
-- `client/src/components/ExpandableSection.tsx`
+- `client/src/components/SizeGrid.tsx`, `QuantityStepper.tsx`, `ExpandableSection.tsx`
+- `client/src/components/JerseyImage.tsx` (added the `view` prop)
 - `client/src/hooks/useCart.ts`
+- `client/src/styles/global.css`
 
-**Done when:**
-- Visit `/products/1` (assuming product ID 1 exists)
-- Product name, price, league, and kit appear
-- Color swatches are visible (3 colored circles)
-- Size grid shows S, M, L, XL; click S → button becomes active (filled background)
-- Quantity stepper starts at 1; minus/plus buttons work (min 1, max 20)
-- Add to Cart button is disabled (grayed out) until a size is picked
-- After picking a size, button becomes enabled and clickable
-- Expandable sections toggle open/closed smoothly
+> **Two places this deviates from the spec above, deliberately:**
+>
+> 1. **Thumbnails are four real views, not "just smaller versions."** Four
+>    identical images are filler, not a gallery. Because the product image is
+>    vector, "collar" and "cuff" are simply tighter `viewBox` crops of the
+>    same paths, and "back" swaps the V-neck for closed shoulder taping — four
+>    genuinely different images for zero extra assets, and the trim becomes
+>    inspectable. This is the page's signature element.
+> 2. **Kit colours are informational, not a "select" control.** The spec asked
+>    for three swatches with clicking that only *looks* selectable. The schema
+>    stores one colourway per product, so a third swatch would be invented data
+>    and a selectable-looking dead control is worse than no control. The two
+>    real colours are shown as labelled chips with their hex values.
+>
+> Also: the disabled Add to cart button reads **"Select a size"** rather than
+> being a dead grey box, and becomes `Add to cart — $360` with the live line
+> total once valid. A disabled control should say what to do next.
+
+**Done when:** ✅ verified in Chrome against the running stack
+- [x] `/products/1` renders; name, price, league and kit all appear
+- [x] Kit colour swatches visible with hex labels
+- [x] Size grid shows S/M/L/XL; selecting fills the button
+- [x] Quantity starts at 1; minus/plus work, bounded 1–20
+- [x] Add to cart disabled until a size is picked, then enabled
+- [x] Expandable sections toggle open/closed smoothly
+
+Also verified beyond the checklist:
+
+- [x] Four views switch the main image; the active thumb is marked
+- [x] `?size=M` from a shop quick-add preselects M and arms the button
+- [x] **`?size=S` on a product where S is sold out does *not* preselect** — the button stays "Select a size", so a stale link can't arm a sold-out purchase
+- [x] Typing `25` into quantity clamps to 20 and disables the increase button; at 1 the decrease button disables
+- [x] Collapsed sections are `inert` — confirmed `[false, true, true]` with only the open one interactive
+- [x] Sold-out sizes disabled and struck through (Man United 1999 → S, L)
+- [x] White kits stay legible on the warm-gray stage
+- [x] No console errors; oxlint clean
+
+> ⚠️ **Not verified:** the mobile/tablet layout of this page. The Chrome window
+> is maximized and `resize_window` has stopped taking effect for this session
+> (same limitation noted in 4b). The grid collapses to one column below 900px
+> by the same mechanism as the shop page, but it has not been seen. Check in
+> Phase 13's mobile pass.
 
 **Resume skill:** Form state, controlled inputs, component composition
 
@@ -1214,6 +1238,6 @@ Decisions made once so they aren't re-litigated each phase:
 
 ---
 
-**Next up: Phase 5 — Product detail page.** The shop page links to
-`/products/:id?size=X`, so the detail page should read that param and
-preselect the size.
+**Next up: Phase 6 — Authentication.** The whole browse flow is built and
+verified; everything past this point (cart, checkout, orders) needs a logged-in
+user, so sessions are the gate.
