@@ -16,8 +16,8 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 
 | | |
 |---|---|
-| **Done** | Phases 1, 2, 3 (all verified end to end) |
-| **Next** | Phase 4a — App shell |
+| **Done** | Phases 1, 2, 3, 4a (all verified end to end) |
+| **Next** | Phase 4b — Shop page (filters, sort, product grid) |
 
 **Verified vs. assumed — read this before trusting any ✅ below:**
 
@@ -25,8 +25,9 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 - Docker is installed and `footylab-postgres` runs on :5432 (`docker compose up -d --wait`).
 - The server builds, boots, loads `.env`, and answers `GET /` and `GET /api/health` (`{"ok":true,"db":true}`). The Vite dev proxy is confirmed to reach Express.
 - Phase 3's products endpoints are **verified against real data**, including filter combinations, input validation, LIKE escaping, and a parameterized-query injection probe.
-- **The client is still the Vite starter template.** Phase 4a replaces it.
-- **Nothing in Phase 4+ has been started.** Those checkboxes are plans, not results.
+- The app shell is live and checked in a real browser: routing, header, footer, API client, and the 404 paths.
+- **`ShopPage` and `ProductPage` are deliberate stubs.** They fetch real data and prove the wiring, but 4b and Phase 5 replace their bodies.
+- **Nothing in Phase 4b+ has been started.** Those checkboxes are plans, not results.
 
 **Actual installed versions** (keep this table honest — it is the first thing a new contributor or agent reads):
 
@@ -360,7 +361,7 @@ Also verified beyond the checklist:
 
 ---
 
-## Phase 4a: Frontend — App Shell
+## Phase 4a: Frontend — App Shell ✅
 
 **Goal:** Routing, layout chrome, and the API client — everything the shop page sits inside. Split out from the shop page itself because the two together were ten files across five concerns.
 
@@ -370,30 +371,55 @@ Also verified beyond the checklist:
 - CSS custom properties and a design-token baseline
 
 **Tasks:**
-- [ ] Replace the Vite starter in `client/src/App.tsx` and `main.tsx` (they are still the default template — hero image, counter button, Vite/React links)
-- [ ] Create `client/src/types.ts` (mirror server types)
-- [ ] Create `client/src/api.ts` — fetch functions: `getProducts(filters)`, `getProduct(id)`
+- [x] Replace the Vite starter in `client/src/App.tsx` and `main.tsx`; delete `App.css`, `index.css` and the starter assets
+- [x] Create `client/src/types.ts` (mirror server types)
+  - Timestamps are typed `string`, not `Date` — JSON has no Date type, so `Date` would compile and then fail at runtime on any date method
+  - Includes `soldOutSizes()`, `isSoldOut()` and `formatPrice()` helpers so the CSV parsing and cents→dollars conversion live in one place
+- [x] Create `client/src/api.ts` — fetch functions: `getProducts(filters)`, `getProduct(id)`, `getHealth()`
   - Requests go to **relative `/api/...` paths**, which the Vite dev proxy forwards to :3000. Do not read `VITE_API_URL` in dev.
   - Every call passes `credentials: 'include'` so session cookies work from Phase 6 onward
-  - Centralize error handling here (throw on non-2xx) so pages don't each re-implement it
-- [ ] Wire up React Router with the route table from the Frontend Routes section above
-- [ ] Create `client/src/components/Header.tsx` — logo, nav links (as `/jerseys?...` presets), search icon, account icon, cart icon with count (0 until Phase 8)
-- [ ] Create `client/src/components/Footer.tsx` — four columns + the portfolio disclaimer
-- [ ] Create `client/src/components/AnnouncementBar.tsx` — thin black banner
-- [ ] Set up `client/src/styles/global.css`: colors as CSS custom properties, fonts (Google Fonts), reset, breakpoints
+  - Error handling is centralized: a typed `ApiError` carrying the HTTP status, so pages can branch on 404 vs. anything else without re-implementing parsing
+- [x] Wire up React Router with the route table from the Frontend Routes section above
+- [x] Create `client/src/components/Header.tsx` — logo, nav links (as `/jerseys?...` presets), search icon, account icon, cart icon with count (0 until Phase 8)
+- [x] Create `client/src/components/Footer.tsx` — four columns + the portfolio disclaimer
+- [x] Create `client/src/components/AnnouncementBar.tsx` — thin black banner
+- [x] Set up `client/src/styles/global.css`: colors as CSS custom properties, fonts (Google Fonts), reset, breakpoints
+- [x] Skip link, visible focus rings, and `prefers-reduced-motion` — cheaper now than retrofitting in Phase B4
 
 **Files created or changed:**
 - `client/src/types.ts`, `client/src/api.ts`
-- `client/src/components/Header.tsx`, `Footer.tsx`, `AnnouncementBar.tsx`
+- `client/src/components/Header.tsx`, `Footer.tsx`, `AnnouncementBar.tsx`, `Layout.tsx`
+- `client/src/pages/ShopPage.tsx`, `ProductPage.tsx`, `PlaceholderPage.tsx`, `NotFoundPage.tsx`
 - `client/src/styles/global.css`
-- `client/src/App.tsx`, `client/src/main.tsx` (replace starter template)
+- `client/src/App.tsx`, `client/src/main.tsx`, `client/index.html`
+- Deleted: `App.css`, `index.css`, `src/assets/*`, `public/icons.svg`
 
-**Done when:**
-- App loads with header, announcement bar, and footer on every route
-- Navigating to `/`, `/jerseys`, `/products/1` renders without router errors (pages may be stubs)
-- No Vite starter content remains
-- Disclaimer footer is visible
-- `getProducts()` called from the browser console returns the 20 seeded products through the proxy
+> **Two gotchas worth knowing before Phase 4b:**
+>
+> 1. The client tsconfig sets **`erasableSyntaxOnly`**, which rejects TypeScript
+>    constructor parameter properties (`constructor(readonly x: T)`). Declare
+>    and assign fields explicitly. The server tsconfig does not set this, so
+>    the same pattern compiles there — easy to trip over when moving code.
+> 2. **`NavLink` compares pathname only.** Since every nav link is a preset on
+>    `/jerseys`, all four highlighted at once. The header compares the
+>    normalized query string instead; reuse `normalizeUrl()` rather than
+>    reintroducing `NavLink` for the filter chips in 4b.
+
+**Done when:** ✅ verified in Chrome against the running stack
+- [x] App loads with header, announcement bar, and footer on every route
+- [x] `/`, `/jerseys`, `/products/18` render without router errors
+- [x] No Vite starter content remains (files deleted, no dangling imports)
+- [x] Disclaimer footer is visible
+- [x] The shop page lists all 20 seeded products through the dev proxy
+
+Also verified beyond the checklist:
+
+- [x] `/products/999` → friendly "That jersey does not exist", driven by `ApiError.status === 404`
+- [x] An unknown route → the real not-found page, not a "coming soon" placeholder
+- [x] Query presets already work end to end: `?kit=Retro` → 1 jersey, `?league=International` → 5
+- [x] Exactly one nav link shows as active per URL
+- [x] Below 900px the desktop nav collapses into a scrollable category row
+- [x] No console errors or warnings; oxlint clean
 
 **Resume skill:** React Router, component composition, design tokens
 
@@ -1144,5 +1170,6 @@ Decisions made once so they aren't re-litigated each phase:
 
 ---
 
-**Next up: Phase 4a — App shell.** The products API is live and verified, so the
-frontend has real data to render. Start by replacing the Vite starter template.
+**Next up: Phase 4b — Shop page.** The shell, routing and API client are in
+place, and query-param filtering already works end to end. 4b builds the
+sidebar filters, sort control and real product grid on top of it.
