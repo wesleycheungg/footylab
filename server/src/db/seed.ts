@@ -7,26 +7,26 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const products = [
-  { name: 'Arsenal Home', team: 'Arsenal', league: 'Premier League', kit_type: 'Home', price_cents: 9000, primary_color: '#DC0000', trim_color: '#FFFFFF', sold_out_sizes: '' },
-  { name: 'Arsenal Away', team: 'Arsenal', league: 'Premier League', kit_type: 'Away', price_cents: 9000, primary_color: '#FFFFFF', trim_color: '#1D2C46', sold_out_sizes: '' },
-  { name: 'Manchester City Home', team: 'Manchester City', league: 'Premier League', kit_type: 'Home', price_cents: 9500, primary_color: '#6CABDA', trim_color: '#FFFFFF', sold_out_sizes: '' },
-  { name: 'Manchester City Away', team: 'Manchester City', league: 'Premier League', kit_type: 'Away', price_cents: 9500, primary_color: '#000000', trim_color: '#6CABDA', sold_out_sizes: 'S' },
-  { name: 'Liverpool Home', team: 'Liverpool', league: 'Premier League', kit_type: 'Home', price_cents: 9000, primary_color: '#C8102E', trim_color: '#FFFFFF', sold_out_sizes: '' },
-  { name: 'Liverpool Away', team: 'Liverpool', league: 'Premier League', kit_type: 'Away', price_cents: 9000, primary_color: '#FFFFFF', trim_color: '#2D8659', sold_out_sizes: '' },
-  { name: 'Real Madrid Home', team: 'Real Madrid', league: 'La Liga', kit_type: 'Home', price_cents: 10000, primary_color: '#FFFFFF', trim_color: '#000000', sold_out_sizes: '' },
-  { name: 'Real Madrid Away', team: 'Real Madrid', league: 'La Liga', kit_type: 'Away', price_cents: 10000, primary_color: '#1D1D2E', trim_color: '#FFFFFF', sold_out_sizes: 'L' },
-  { name: 'Barcelona Home', team: 'Barcelona', league: 'La Liga', kit_type: 'Home', price_cents: 10000, primary_color: '#004687', trim_color: '#FFC52F', sold_out_sizes: '' },
-  { name: 'Barcelona Away', team: 'Barcelona', league: 'La Liga', kit_type: 'Away', price_cents: 10000, primary_color: '#FFCC00', trim_color: '#004687', sold_out_sizes: '' },
-  { name: 'Inter Milan Home', team: 'Inter Milan', league: 'Serie A', kit_type: 'Home', price_cents: 9500, primary_color: '#000000', trim_color: '#1B3A8E', sold_out_sizes: '' },
-  { name: 'AC Milan Home', team: 'AC Milan', league: 'Serie A', kit_type: 'Home', price_cents: 9500, primary_color: '#DC143C', trim_color: '#000000', sold_out_sizes: 'M' },
-  { name: 'Bayern Munich Home', team: 'Bayern Munich', league: 'Bundesliga', kit_type: 'Home', price_cents: 9500, primary_color: '#DC0000', trim_color: '#FFFFFF', sold_out_sizes: '' },
-  { name: 'Bayern Munich Away', team: 'Bayern Munich', league: 'Bundesliga', kit_type: 'Away', price_cents: 9500, primary_color: '#FFFFFF', trim_color: '#DC0000', sold_out_sizes: '' },
-  { name: 'Argentina Home', team: 'Argentina', league: 'International', kit_type: 'Home', price_cents: 8500, primary_color: '#87CEEB', trim_color: '#FFFFFF', sold_out_sizes: '' },
-  { name: 'Brazil Home', team: 'Brazil', league: 'International', kit_type: 'Home', price_cents: 8500, primary_color: '#FFD700', trim_color: '#008000', sold_out_sizes: '' },
-  { name: 'France Home', team: 'France', league: 'International', kit_type: 'Home', price_cents: 8500, primary_color: '#002395', trim_color: '#FFFFFF', sold_out_sizes: '' },
-  { name: 'Manchester United 1999', team: 'Manchester United', league: 'Premier League', kit_type: 'Retro', price_cents: 12000, primary_color: '#DA291C', trim_color: '#FFFFFF', sold_out_sizes: 'S,L' },
-  { name: 'England Home', team: 'England', league: 'International', kit_type: 'Home', price_cents: 8500, primary_color: '#FFFFFF', trim_color: '#DA291C', sold_out_sizes: '' },
-  { name: 'USA Home', team: 'USA', league: 'International', kit_type: 'Home', price_cents: 8500, primary_color: '#002868', trim_color: '#FFFFFF', sold_out_sizes: '' },
+  { name: 'Arsenal Home', team: 'Arsenal', league: 'Premier League', kit_type: 'Home', price_cents: 9000, primary_color: '#DC0000', trim_color: '#FFFFFF', sold_out_sizes: '', days_ago: 3 },
+  { name: 'Arsenal Away', team: 'Arsenal', league: 'Premier League', kit_type: 'Away', price_cents: 9000, primary_color: '#FFFFFF', trim_color: '#1D2C46', sold_out_sizes: '', days_ago: 3 },
+  { name: 'Manchester City Home', team: 'Manchester City', league: 'Premier League', kit_type: 'Home', price_cents: 9500, primary_color: '#6CABDA', trim_color: '#FFFFFF', sold_out_sizes: '', days_ago: 45 },
+  { name: 'Manchester City Away', team: 'Manchester City', league: 'Premier League', kit_type: 'Away', price_cents: 9500, primary_color: '#000000', trim_color: '#6CABDA', sold_out_sizes: 'S', days_ago: 45 },
+  { name: 'Liverpool Home', team: 'Liverpool', league: 'Premier League', kit_type: 'Home', price_cents: 9000, primary_color: '#C8102E', trim_color: '#FFFFFF', sold_out_sizes: '', days_ago: 60 },
+  { name: 'Liverpool Away', team: 'Liverpool', league: 'Premier League', kit_type: 'Away', price_cents: 9000, primary_color: '#FFFFFF', trim_color: '#2D8659', sold_out_sizes: '', days_ago: 60 },
+  { name: 'Real Madrid Home', team: 'Real Madrid', league: 'La Liga', kit_type: 'Home', price_cents: 10000, primary_color: '#FFFFFF', trim_color: '#000000', sold_out_sizes: '', days_ago: 2 },
+  { name: 'Real Madrid Away', team: 'Real Madrid', league: 'La Liga', kit_type: 'Away', price_cents: 10000, primary_color: '#1D1D2E', trim_color: '#FFFFFF', sold_out_sizes: 'L', days_ago: 2 },
+  { name: 'Barcelona Home', team: 'Barcelona', league: 'La Liga', kit_type: 'Home', price_cents: 10000, primary_color: '#004687', trim_color: '#FFC52F', sold_out_sizes: '', days_ago: 90 },
+  { name: 'Barcelona Away', team: 'Barcelona', league: 'La Liga', kit_type: 'Away', price_cents: 10000, primary_color: '#FFCC00', trim_color: '#004687', sold_out_sizes: '', days_ago: 90 },
+  { name: 'Inter Milan Home', team: 'Inter Milan', league: 'Serie A', kit_type: 'Home', price_cents: 9500, primary_color: '#000000', trim_color: '#1B3A8E', sold_out_sizes: '', days_ago: 120 },
+  { name: 'AC Milan Home', team: 'AC Milan', league: 'Serie A', kit_type: 'Home', price_cents: 9500, primary_color: '#DC143C', trim_color: '#000000', sold_out_sizes: 'M', days_ago: 120 },
+  { name: 'Bayern Munich Home', team: 'Bayern Munich', league: 'Bundesliga', kit_type: 'Home', price_cents: 9500, primary_color: '#DC0000', trim_color: '#FFFFFF', sold_out_sizes: '', days_ago: 30 },
+  { name: 'Bayern Munich Away', team: 'Bayern Munich', league: 'Bundesliga', kit_type: 'Away', price_cents: 9500, primary_color: '#FFFFFF', trim_color: '#DC0000', sold_out_sizes: '', days_ago: 30 },
+  { name: 'Argentina Home', team: 'Argentina', league: 'International', kit_type: 'Home', price_cents: 8500, primary_color: '#87CEEB', trim_color: '#FFFFFF', sold_out_sizes: '', days_ago: 200 },
+  { name: 'Brazil Home', team: 'Brazil', league: 'International', kit_type: 'Home', price_cents: 8500, primary_color: '#FFD700', trim_color: '#008000', sold_out_sizes: '', days_ago: 200 },
+  { name: 'France Home', team: 'France', league: 'International', kit_type: 'Home', price_cents: 8500, primary_color: '#002395', trim_color: '#FFFFFF', sold_out_sizes: '', days_ago: 150 },
+  { name: 'Manchester United 1999', team: 'Manchester United', league: 'Premier League', kit_type: 'Retro', price_cents: 12000, primary_color: '#DA291C', trim_color: '#FFFFFF', sold_out_sizes: 'S,L', days_ago: 400 },
+  { name: 'England Home', team: 'England', league: 'International', kit_type: 'Home', price_cents: 8500, primary_color: '#FFFFFF', trim_color: '#DA291C', sold_out_sizes: '', days_ago: 5 },
+  { name: 'USA Home', team: 'USA', league: 'International', kit_type: 'Home', price_cents: 8500, primary_color: '#002868', trim_color: '#FFFFFF', sold_out_sizes: '', days_ago: 180 },
 ];
 
 async function seed() {
@@ -71,9 +71,12 @@ async function seed() {
 
     console.log('Seeding products...');
     for (const product of products) {
+      // created_at is backdated by days_ago so the "New" badge (7 days)
+      // actually distinguishes a few products. Seeding everything at
+      // CURRENT_TIMESTAMP made all 20 "New", which is the same as none.
       await client.query(
-        `INSERT INTO products (name, team, league, kit_type, price_cents, primary_color, trim_color, sold_out_sizes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        `INSERT INTO products (name, team, league, kit_type, price_cents, primary_color, trim_color, sold_out_sizes, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW() - make_interval(days => $9))`,
         [
           product.name,
           product.team,
@@ -83,6 +86,7 @@ async function seed() {
           product.primary_color,
           product.trim_color,
           product.sold_out_sizes,
+          product.days_ago,
         ]
       );
     }
