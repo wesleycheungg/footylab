@@ -9,6 +9,11 @@
   "scripts": {
     "dev": "npm run dev --workspaces",
     "build": "npm run build --workspaces",
-    "install": "npm install --workspaces"
+    "start": "npm run start --workspace server",
+    "db:setup": "npm run db:setup --workspace server",
+    "lint": "npm run lint --workspace client"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

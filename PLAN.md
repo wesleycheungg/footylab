@@ -10,16 +10,52 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 
 ---
 
+## Current State
+
+**Last updated:** 2026-11-09
+
+| | |
+|---|---|
+| **Done** | Phase 1, Phase 2 (both verified end to end) |
+| **Next** | Phase 3 — Products API |
+
+**Verified vs. assumed — read this before trusting any ✅ below:**
+
+- Phase 2 is **fully verified against a live database.** Schema applied, 20 products seeded with ids 1–20, re-seed confirmed idempotent, CHECK constraints confirmed to reject bad data.
+- Docker is installed and `footylab-postgres` runs on :5432 (`docker compose up -d --wait`).
+- The server builds, boots, loads `.env`, and answers `GET /` and `GET /api/health` (`{"ok":true,"db":true}`). The Vite dev proxy is confirmed to reach Express.
+- **Nothing in Phase 3+ has been started.** Those checkboxes are plans, not results.
+
+**Actual installed versions** (keep this table honest — it is the first thing a new contributor or agent reads):
+
+| Package | Version |
+|---|---|
+| Node | 26 (pinned in `.nvmrc`, `engines.node >=22`) |
+| React / react-dom | 19.3.1 |
+| react-router-dom | 6.20.1 |
+| Vite | 8.3.6 |
+| TypeScript | 7.0.2 (both workspaces) |
+| Linter | **oxlint** 1.90 (not eslint/prettier) |
+| Express | 4.18 |
+| pg | 8.11 |
+| TS runner | **tsx** (not ts-node) |
+| PostgreSQL | 16-alpine |
+
+> If you have a server running from before 2026-11-09, restart it. The old
+> `node --loader ts-node/esm` dev command has been removed.
+
+---
+
 ## Tech Stack
 
 | Layer | Tech |
 |-------|------|
-| **Frontend** | Vite + React 18 + TypeScript + React Router v6 + plain CSS |
-| **Backend** | Node.js + Express + TypeScript |
-| **Database** | PostgreSQL (via Docker Compose) |
+| **Frontend** | Vite 8 + React 19 + TypeScript 7 + React Router v6 + plain CSS |
+| **Backend** | Node.js 26 + Express + TypeScript (run via `tsx`) |
+| **Database** | PostgreSQL 16 (via Docker Compose) |
 | **SQL** | Plain SQL (no ORM); `pg` client library |
-| **Dev tools** | Docker Compose, OpenAPI/Swagger |
-| **Testing (Phase B)** | Vitest, pytest, Playwright, axe, k6 |
+| **Dev tools** | Docker Compose, oxlint, OpenAPI/Swagger |
+| **Testing (Phase B)** | Vitest, supertest, Playwright, axe, k6 |
 | **CI/CD (Phase B)** | GitHub Actions |
 
 ---
@@ -37,26 +73,41 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 - `name` (text)
 - `team` (text)
 - `league` (text)
-- `kit_type` (text) — Home, Away, Third, Retro
-- `price_cents` (integer)
+- `kit_type` (text) — CHECK in (Home, Away, Third, Retro)
+- `price_cents` (integer) — CHECK > 0
 - `primary_color` (text) — e.g., "#DC0000"
 - `trim_color` (text) — e.g., "#FFFFFF"
 - `sold_out_sizes` (text) — e.g., "S,L" (comma-separated or empty)
 - `created_at` (timestamp)
 
+> **On `sold_out_sizes` being a CSV string:** this is a deliberate simplicity
+> tradeoff, not an oversight. There is no per-size stock count anywhere in this
+> project, so a `product_sizes` join table would add a layer without adding
+> information. The cost is that size filtering needs a delimiter-padded
+> predicate so `'S'` cannot match `'XS'`:
+>
+> ```sql
+> AND ',' || sold_out_sizes || ',' NOT LIKE '%,' || $1 || ',%'
+> ```
+>
+> Use exactly that predicate everywhere a size filter is needed, rather than
+> re-inventing it per phase.
+
 ### cart_items
 - `id` (integer, primary key)
 - `user_id` (integer, foreign key)
 - `product_id` (integer, foreign key)
-- `size` (text) — S, M, L, XL
-- `quantity` (integer)
+- `size` (text) — CHECK in (S, M, L, XL)
+- `quantity` (integer) — CHECK > 0
 - `created_at` (timestamp)
 - **unique constraint:** `(user_id, product_id, size)`
 
 ### orders
 - `id` (integer, primary key)
 - `user_id` (integer, foreign key)
-- `total_cents` (integer)
+- `subtotal_cents` (integer) — must equal `SUM(order_items.price_cents * quantity)` exactly
+- `shipping_cents` (integer) — 0 at or above the free-shipping threshold, flat fee below it
+- `total_cents` (integer) — `subtotal_cents + shipping_cents`
 - `shipping_name` (text)
 - `shipping_email` (text)
 - `shipping_address` (text)
@@ -65,17 +116,27 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 - `shipping_zip` (text)
 - `created_at` (timestamp)
 
+> **Money is stored as a breakdown, not one number, and there is no tax.**
+> A single `total_cents` cannot express "free shipping over $150" — you could
+> not tell whether a stored total included shipping, so orders would never
+> reconcile against their items. Tax was dropped outright: it was undecided in
+> three places in earlier drafts and would have added churn to every
+> order-total assertion in Phase B2 for no learning value.
+
 ### order_items
 - `id` (integer, primary key)
 - `order_id` (integer, foreign key)
 - `product_id` (integer, foreign key)
-- `size` (text)
-- `quantity` (integer)
+- `size` (text) — CHECK in (S, M, L, XL)
+- `quantity` (integer) — CHECK > 0
 - `price_cents` (integer) — locked price at time of order
 
 ---
 
 ## API Routes (Express)
+
+### Health
+- `GET /api/health` — returns `{ok: true, db: <bool>}`; 200 when the DB is reachable, 503 when not. CI polls this before starting E2E tests. **Implemented.**
 
 ### Authentication
 - `POST /api/auth/signup` — email, password → creates user, returns session cookie
@@ -94,9 +155,27 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 - `DELETE /api/cart/:itemId` — removes item
 
 ### Orders (requires logged-in user)
-- `POST /api/orders` — body: shipping form + items (from current cart) → creates order, clears cart, returns order ID
+- `POST /api/orders` — body: shipping form only (**never card data**) → creates order, clears cart, returns order ID
 - `GET /api/orders` — returns user's orders (id, total, created_at)
-- `GET /api/orders/:id` — returns order detail with order_items
+- `GET /api/orders/:id` — returns order detail with order_items; **scoped by `user_id` in the WHERE clause**, so another user's order returns **404, not 403** (403 would leak that the order exists)
+
+---
+
+## Frontend Routes
+
+| Path | Page | Auth |
+|------|------|------|
+| `/` | ShopPage (all jerseys) | public |
+| `/jerseys` | ShopPage (filters via query params) | public |
+| `/products/:id` | ProductPage | public |
+| `/login`, `/signup` | LoginPage, SignupPage | public |
+| `/checkout` | CheckoutPage | **protected** |
+| `/orders` | OrderHistoryPage | **protected** |
+| `/orders/:id` | OrderDetailPage / OrderConfirmationPage | **protected** |
+
+Header nav links (Clubs, National Teams, Retro, New Arrivals) are **filter
+presets on `/jerseys`**, not separate pages — e.g. `/jerseys?kit=Retro`,
+`/jerseys?league=International`. The cart is a drawer overlay, not a route.
 
 ---
 
@@ -114,7 +193,7 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 - **Announcement bar:** thin black banner at top ("Free shipping on orders over $150 · Free 30-day returns")
 - **Header:** logo, nav links (Clubs, National Teams, Retro, New Arrivals), search icon, account icon, cart icon with count
 - **Shop page:** left sidebar filters (league chips, size pills, kit checkboxes), breadcrumb + title + intro copy, result count and sort on right, product grid (4 columns on desktop, 2 on tablet, 1 on mobile)
-- **Product cards:** large jersey SVG, badge in corner (New, Final few, Retro), name, kit + league, price; on hover, show quick-add size buttons (sold-out sizes crossed out)
+- **Product cards:** large jersey SVG, badge in corner (New, Retro, Sold out), name, kit + league, price; on hover, show quick-add size buttons (sold-out sizes crossed out)
 - **Product detail page:** large image with 4 thumbnails below, right panel with color swatches, size grid, quantity stepper, full-width Add to Cart button (disabled until size selected), expandable Details/Fit/Shipping sections
 - **Touch targets:** 44px minimum; real buttons with labels
 
@@ -179,26 +258,39 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 - [x] Create `server/src/db/pool.ts` (PostgreSQL connection pool using `pg` library)
 - [x] Create `server/src/db/seed.ts` — hardcoded array of ~20 products (Arsenal, Man City, Liverpool, Real Madrid, Barca, Inter, AC Milan, Bayern, Argentina, Brazil, France, USA, Man United 1999, etc.)
 - [x] Script should read `.env` DATABASE_URL and run schema + seed
+  - Loaded via Node's built-in `--env-file=.env`, **not** the `dotenv` package
 - [x] Add `npm run db:setup` to server package.json
+- [x] Seed must be **idempotent** — `TRUNCATE ... RESTART IDENTITY CASCADE` inside a transaction before inserting, so IDs stay stable and re-running doesn't duplicate rows (the UI and E2E tests reference `/products/1`)
+- [x] Fail with a readable message, not a raw stack trace, when Postgres isn't running
 
 **Files created or changed:**
-- `server/src/db/schema.sql` (64 lines) — 5 tables with CHECK constraints, UNIQUE constraints, and indices
-- `server/src/db/pool.ts` (11 lines) — PostgreSQL connection pool with error handling
-- `server/src/db/seed.ts` (74 lines) — 20 products across 6 leagues
-- `server/src/db/index.ts` (3 lines) — export pool
-- `server/package.json` (updated) — @types/pg added for TypeScript
-- `server/.env` (already set up correctly)
+- `server/src/db/schema.sql` — 5 tables with CHECK constraints, UNIQUE constraints, and indices
+- `server/src/db/pool.ts` — PostgreSQL connection pool with error handling
+- `server/src/db/seed.ts` — 20 products across 5 leagues; idempotent (truncates before seeding)
+- `server/src/db/index.ts` — export pool
+- `server/package.json` (updated) — `@types/pg`, `tsx`
+- `server/.env` / `.env.example` — `DATABASE_URL`, `NODE_ENV`, `PORT`, `SESSION_SECRET`
 
-**Done when:**
-- ✅ `npm run db:setup` compiles without errors
-- ✅ All 6 database files created and committed
-- ✅ Pushed to GitHub (commit: e417501)
+**Done when** — ✅ **all verified against a live database on 2026-11-09.**
+Compiling was never the bar; these are the real criteria:
 
-**Ready to test locally:** 
+- [x] `docker compose up -d --wait` → Postgres container reports healthy
+- [x] `npm run db:setup` exits 0 and prints "Seeded 20 products"
+- [x] `SELECT count(*) FROM products` → exactly **20**, with ids 1–20 (so `/products/1` resolves)
+- [x] **Ran `npm run db:setup` a second time → still 20, not 40** (guards the idempotency fix)
+- [x] `curl localhost:3000/api/health` → `{"ok":true,"db":true}` with HTTP 200
+
+Also spot-checked beyond the checklist:
+
+- All 5 tables created; 10 CHECK constraints present
+- Constraints actually reject bad data — `kit_type='Goalkeeper'` and `price_cents=-5` are both refused
+- Seed spread: Premier League 7, International 5, La Liga 4, Serie A 2, Bundesliga 2
+
 ```bash
 docker compose up -d
 npm run db:setup
-psql -h localhost -U postgres -d footylab -c "SELECT count(*) FROM products"  # Should show 20
+npm run db:setup   # must be idempotent
+psql -h localhost -U postgres -d footylab -c "SELECT count(*) FROM products"
 ```
 
 **Resume skill:** Database design, PostgreSQL, seed data
@@ -222,10 +314,12 @@ psql -h localhost -U postgres -d footylab -c "SELECT count(*) FROM products"  # 
     - Build dynamic WHERE clauses for filters
     - Search by name, team, or league (case-insensitive)
     - Sort by featured (default, order by id), price-asc, price-desc
-    - Filter by size (exclude products with that size in sold_out_sizes)
-    - Return 50 results per page (no pagination yet, keep it simple)
+    - Filter by size — exclude products with that size in `sold_out_sizes`, using the
+      delimiter-padded predicate from the Data Model section (so `'S'` doesn't match `'XS'`)
+    - Flat `LIMIT 50`. No pagination — there are only 20 products
   - GET `/api/products/:id` — single product by ID; return 404 if not found
 - [ ] Create middleware to parse JSON, handle errors
+- [x] `GET /api/health` → `{ok, db}` — already implemented in `server/src/index.ts`
 - [ ] Wire up routes to Express app
 
 **Files created or changed:**
@@ -246,54 +340,83 @@ psql -h localhost -U postgres -d footylab -c "SELECT count(*) FROM products"  # 
 
 ---
 
-## Phase 4: Frontend — Shop Page
+## Phase 4a: Frontend — App Shell
+
+**Goal:** Routing, layout chrome, and the API client — everything the shop page sits inside. Split out from the shop page itself because the two together were ten files across five concerns.
+
+**What you'll learn:**
+- React Router setup and layout composition
+- Typed fetch wrappers
+- CSS custom properties and a design-token baseline
+
+**Tasks:**
+- [ ] Replace the Vite starter in `client/src/App.tsx` and `main.tsx` (they are still the default template — hero image, counter button, Vite/React links)
+- [ ] Create `client/src/types.ts` (mirror server types)
+- [ ] Create `client/src/api.ts` — fetch functions: `getProducts(filters)`, `getProduct(id)`
+  - Requests go to **relative `/api/...` paths**, which the Vite dev proxy forwards to :3000. Do not read `VITE_API_URL` in dev.
+  - Every call passes `credentials: 'include'` so session cookies work from Phase 6 onward
+  - Centralize error handling here (throw on non-2xx) so pages don't each re-implement it
+- [ ] Wire up React Router with the route table from the Frontend Routes section above
+- [ ] Create `client/src/components/Header.tsx` — logo, nav links (as `/jerseys?...` presets), search icon, account icon, cart icon with count (0 until Phase 8)
+- [ ] Create `client/src/components/Footer.tsx` — four columns + the portfolio disclaimer
+- [ ] Create `client/src/components/AnnouncementBar.tsx` — thin black banner
+- [ ] Set up `client/src/styles/global.css`: colors as CSS custom properties, fonts (Google Fonts), reset, breakpoints
+
+**Files created or changed:**
+- `client/src/types.ts`, `client/src/api.ts`
+- `client/src/components/Header.tsx`, `Footer.tsx`, `AnnouncementBar.tsx`
+- `client/src/styles/global.css`
+- `client/src/App.tsx`, `client/src/main.tsx` (replace starter template)
+
+**Done when:**
+- App loads with header, announcement bar, and footer on every route
+- Navigating to `/`, `/jerseys`, `/products/1` renders without router errors (pages may be stubs)
+- No Vite starter content remains
+- Disclaimer footer is visible
+- `getProducts()` called from the browser console returns the 20 seeded products through the proxy
+
+**Resume skill:** React Router, component composition, design tokens
+
+---
+
+## Phase 4b: Frontend — Shop Page
 
 **Goal:** Build the product grid page with filters, search, and sorting (no cart or checkout yet).
 
 **What you'll learn:**
-- React hooks (useState, useEffect, useContext)
-- React Router for navigation
-- Fetching data from API
+- React hooks (useState, useEffect)
+- Fetching and deriving filtered data
 - CSS grid and responsive layout
 
 **Tasks:**
-- [ ] Create `client/src/types.ts` (mirror server types)
-- [ ] Create `client/src/api.ts` — fetch functions: `getProducts(filters)`, `getProduct(id)`
 - [ ] Create `client/src/pages/ShopPage.tsx`
-  - Header with nav links, search box, account + cart icons (cart count = 0 for now)
   - Breadcrumb (Home / Jerseys)
   - Left sidebar: league chips (All, Premier League, La Liga, Serie A, Bundesliga, International), size pills (S, M, L, XL), kit checkboxes (Home, Away, Third, Retro), "Clear all filters" link
   - Main area: title "All Jerseys", intro copy, result count ("9 jerseys"), sort dropdown (Featured, Price: Low to High, Price: High to Low)
   - Product grid: 4 columns on desktop, 2 on tablet, 1 on mobile
 - [ ] Create `client/src/components/ProductCard.tsx`
-  - Display product image (SVG jersey with primary/trim colors), badge (New if created in last 7 days, or "Final few" if < 3 of any size in stock, or "Retro" if kit_type === Retro)
+  - Display product image (SVG jersey with primary/trim colors)
+  - Badge: **"New"** if created in last 7 days, or **"Retro"** if `kit_type === 'Retro'`, or **"Sold out"** if every size is in `sold_out_sizes`
+    - ⚠️ The old "Final few (< 3 of any size in stock)" rule was **removed** — no per-size stock count exists in the schema and none is being added. Don't reintroduce it without adding a stock model first.
   - Show name, kit, league, price
-  - On hover, show quick-add size buttons (sold-out sizes are grayed out with strikethrough)
-  - Click a size button → add to cart (redirect to login if not logged in)
+  - On hover, show quick-add size buttons (sold-out sizes grayed out with strikethrough)
+  - Quick-add buttons **navigate to the product detail page** for now. They do not add to cart — the cart doesn't exist until Phase 8. Wire them to `addItem()` there.
 - [ ] Create `client/src/components/JerseyImage.tsx` — renders SVG jersey shape filled with primary color, trim as accent stripe
-- [ ] Set up global CSS: colors, fonts (Google Fonts), reset, breakpoints
 - [ ] Add data-testid to filter controls, product cards, sort dropdown
 
 **Files created or changed:**
-- `client/src/types.ts`
-- `client/src/api.ts`
 - `client/src/pages/ShopPage.tsx`
 - `client/src/components/ProductCard.tsx`
 - `client/src/components/JerseyImage.tsx`
-- `client/src/components/Header.tsx`
-- `client/src/components/Footer.tsx`
-- `client/src/styles/global.css`
-- `client/src/App.tsx` (wire up routes)
-- `client/src/main.tsx` (entry point)
 
 **Done when:**
 - Shop page loads and displays all 20 products in a grid
 - Clicking a league chip filters products (e.g., "Premier League" shows ~5 products)
 - Search box filters by team name (type "Arsenal" → shows Arsenal home, away, etc.)
 - Sort dropdown changes order (Price: Low to High puts lowest-priced items first)
-- Breadcrumb, header, and footer are visible on every page
+- Breadcrumb is visible; header and footer still render (from 4a)
 - Grid is responsive: 4 cols desktop, 2 tablet, 1 mobile (test by resizing)
-- Disclaimer footer is visible
+- Sold-out sizes appear struck through on card hover
 
 **Resume skill:** React components, API integration, CSS Grid, responsive design
 
@@ -382,14 +505,19 @@ psql -h localhost -U postgres -d footylab -c "SELECT count(*) FROM products"  # 
     - Return user object
   - POST `/api/auth/logout` — clears session
   - GET `/api/auth/me` — returns logged-in user or 401
-- [ ] Update database schema: add a sessions table for express-session
+- [ ] Update database schema: add the session table for express-session
+  - **Use `connect-pg-simple`'s own `table.sql` verbatim** (ships in the package) rather than hand-writing the DDL — it expects an exact `sid`/`sess`/`expire` shape and an index on `expire`
+  - Note the seed's `TRUNCATE` list deliberately excludes it
+- [ ] Read `SESSION_SECRET` from env (already in `.env.example`); fail fast at boot if it's missing in production
+- [ ] Cookie config: `httpOnly: true`, `sameSite: 'lax'`, `secure` in production only
+- [ ] Hardening (cheap, and reviewers look for it): add `helmet`, and rate-limit `POST /api/auth/login` + `/signup`
 - [ ] Wire up routes to Express app
 
 **Files created or changed:**
 - `server/src/middleware/auth.ts`
 - `server/src/routes/auth.ts`
-- `server/src/db/schema.sql` (add sessions table)
-- `server/src/index.ts` (add session middleware, wire up auth routes)
+- `server/src/db/schema.sql` (add session table)
+- `server/src/index.ts` (add session middleware, helmet, wire up auth routes)
 
 **Done when:**
 - `curl -X POST http://localhost:3000/api/auth/signup -H 'Content-Type: application/json' -d '{"email":"test@example.com","password":"password123"}'` creates a user and returns `{id, email}`
@@ -430,7 +558,7 @@ psql -h localhost -U postgres -d footylab -c "SELECT count(*) FROM products"  # 
   - Show error message if signup fails
 - [ ] Create `client/src/components/ProtectedRoute.tsx` — redirects to login if not logged in
 - [ ] Update Header component to show account icon + dropdown (Login, Signup, or Logout + Account link if logged in)
-- [ ] Update Shop and Product pages to use ProtectedRoute (no, actually keep them public; only cart is protected)
+- [ ] Apply `ProtectedRoute` to **`/checkout`, `/orders`, and `/orders/:id` only.** The shop and product pages stay public — browsing must not require an account. See the Frontend Routes table.
 - [ ] Add data-testid to form inputs, submit buttons, error messages
 
 **Files created or changed:**
@@ -470,6 +598,11 @@ psql -h localhost -U postgres -d footylab -c "SELECT count(*) FROM products"  # 
   - PATCH `/api/cart/:itemId` — requires auth; body: `{quantity}`; updates quantity or removes if quantity = 0
   - DELETE `/api/cart/:itemId` — requires auth; removes item
   - All endpoints calculate cart subtotal (sum of price * quantity)
+
+> **Shipping rule, stated once — the single source of truth for the whole project:**
+> free shipping at a subtotal **of $150 or more**, otherwise a **flat $10**. No tax.
+> The **server** computes `shipping_cents`; the client only displays it. Never let
+> the browser send a shipping or total amount.
 - [ ] Create `client/src/contexts/CartContext.tsx` — manages cart state
   - `useCart()` hook: `{items, addItem, updateItem, removeItem, total, itemCount}`
   - Fetch `/api/cart` on app load (if logged in)
@@ -477,7 +610,7 @@ psql -h localhost -U postgres -d footylab -c "SELECT count(*) FROM products"  # 
   - Shows list of cart items (product name, size, quantity, price per item, subtotal)
   - Quantity stepper for each item (minus/plus, or input)
   - Remove button for each item
-  - Subtotal, shipping cost (free over $150), tax (if applicable), total
+  - Subtotal, shipping cost, total (no tax)
   - **Free shipping progress bar:** shows progress toward $150; changes color when threshold reached
   - Checkout button (only clickable if items exist)
   - "Your cart is empty" message if no items
@@ -523,13 +656,13 @@ psql -h localhost -U postgres -d footylab -c "SELECT count(*) FROM products"  # 
 - [ ] Create `client/src/pages/CheckoutPage.tsx`
   - Requires logged-in user; redirects to login if not
   - Left side: cart items summary (product name, size, qty, price per item)
-  - Subtotal, shipping (free or $10), tax (if applicable), total
+  - Subtotal, shipping (free at $150+, else $10), total — no tax
   - Right side: two-column form
     - **Shipping info:** name, email, address, city, state, zip
     - **Card info:** card number (fake validation: 16 digits), exp (MM/YY), CVV (3 digits), cardholder name
     - Validate all fields before enabling submit
   - "Place Order" button
-  - On submit: POST to `/api/orders` with shipping + card (server ignores card, just validates format)
+  - On submit: POST to `/api/orders` with **shipping fields only**
   - Redirect to `/orders/:id` (order confirmation page) on success
   - Show error message if checkout fails
 - [ ] Create `client/src/pages/OrderConfirmationPage.tsx`
@@ -545,16 +678,24 @@ psql -h localhost -U postgres -d footylab -c "SELECT count(*) FROM products"  # 
   - Link back to order history
 - [ ] Update `server/src/routes/orders.ts`
   - POST `/api/orders` — requires auth
-    - Body: shipping form (name, email, address, city, state, zip) + card form (for display/logging, not validation)
+    - Body: shipping form only (name, email, address, city, state, zip)
     - Fetch current cart items and product prices (server always recalculates prices)
     - Validate: cart not empty, all sizes in stock (check sold_out_sizes)
+    - Compute `subtotal_cents` from cart, `shipping_cents` from the $150/$10 rule, `total_cents` as their sum
     - Create order in database (begin transaction)
     - Copy cart items to order_items (locking prices at order time)
     - Clear cart (delete all cart_items for user)
     - Commit transaction
     - Return order object
   - GET `/api/orders` — requires auth; returns list of user's orders (id, created_at, total_cents, item count)
-  - GET `/api/orders/:id` — requires auth; returns full order with order_items
+  - GET `/api/orders/:id` — requires auth; returns full order with order_items. **Scope the query by `user_id`** so another user's order naturally returns 404
+
+> **Card data never leaves the browser.** Card fields are validated client-side
+> for format only and are **not** included in the request body — there is no
+> payment processing in this project, so there is no reason for card numbers to
+> reach the server, and none to log them. Earlier drafts said the server would
+> accept them "for display/logging"; that was removed deliberately. Don't add
+> card columns to the `orders` table.
 - [ ] Update Header to add "Order History" link in account dropdown
 - [ ] Add data-testid to shipping form inputs, card inputs, place-order button, order items, etc.
 
@@ -670,7 +811,9 @@ psql -h localhost -U postgres -d footylab -c "SELECT count(*) FROM products"  # 
 - [ ] Create `README.md` at project root
   - Project overview (what it is, why it exists)
   - Tech stack list
-  - Setup instructions (clone, `npm install`, `docker-compose up`, `npm run db:setup`, `npm run dev`)
+  - Prerequisites: **Docker** and Node (version pinned in `.nvmrc`)
+  - Setup instructions in this exact order: clone → `npm install` → `cp server/.env.example server/.env` → `docker compose up -d` → `npm run db:setup` → `npm run dev`
+    - `db:setup` before the containers are up is the most likely first-run failure; call it out
   - API documentation (link to `/api-docs` or brief endpoint list)
   - Project structure (monorepo layout, what's in `/client` and `/server`)
   - Design system (colors, fonts, spacing)
@@ -710,7 +853,7 @@ psql -h localhost -U postgres -d footylab -c "SELECT count(*) FROM products"  # 
   - Try to add a sold-out size → verify it's disabled on product page and quick-add
   - Try to checkout with an empty cart → error
   - Try to access `/orders` without login → redirect to login
-  - Try to view another user's order → 403 Forbidden
+  - Try to view another user's order → **404** (the query is scoped by `user_id`, so it must not reveal that the order exists)
   - Add item to cart, then delete product (or mark as sold out) → verify cart still works or shows warning
 - [ ] Mobile test: shop page, product page, cart drawer, checkout — all responsive
 - [ ] Accessibility: tab through forms, use keyboard nav, test screen reader compatibility (basic check)
@@ -766,7 +909,7 @@ The following phases are for when you want to add test coverage and CI/CD. **I w
 
 ## Phase B2: API Tests (Backend)
 
-**Goal:** Test Express endpoints with pytest (Python) or Vitest (Node.js).
+**Goal:** Test Express endpoints with **Vitest + supertest**.
 
 **What you'll learn:**
 - API testing (request/response validation)
@@ -775,7 +918,10 @@ The following phases are for when you want to add test coverage and CI/CD. **I w
 - Edge case validation
 
 **Tasks:**
-- [ ] Choose a tool (pytest + requests for Python, or Vitest + supertest for Node.js)
+- [ ] Set up **Vitest + supertest** in the server workspace, exposed as `npm run test --workspace server`
+  - Decided over pytest: one toolchain across the monorepo, tests share the server's TypeScript types, and CI needs a single job with no Python runtime
+  - Export the Express `app` separately from `app.listen()` in `server/src/index.ts` so supertest can mount it without binding a port
+  - Point tests at a separate `footylab_test` database and reset it between runs with the same truncate the seed uses
 - [ ] Write tests for:
   - **Auth:** signup (happy path, duplicate email), login (correct/wrong password), logout, GET /me (with/without session)
   - **Products:** GET list with filters, GET single, 404 handling
@@ -785,7 +931,7 @@ The following phases are for when you want to add test coverage and CI/CD. **I w
 - [ ] Add SQL assertions (e.g., after checkout, verify order_items row count matches cart items)
 
 **Done when:**
-- `npm run test:api` (or pytest) runs all API tests
+- `npm run test --workspace server` runs all API tests
 - Tests cover happy paths and error cases
 - >80% coverage on route handlers
 
@@ -867,9 +1013,9 @@ The following phases are for when you want to add test coverage and CI/CD. **I w
 
 **Tasks:**
 - [ ] Create `.github/workflows/test.yml`:
-  - Lint (eslint, prettier)
+  - Lint (`oxlint`)
   - Unit tests (Vitest frontend)
-  - API tests (pytest/Vitest backend)
+  - API tests (Vitest + supertest, backend)
   - E2E tests (Playwright with Postgres in Docker)
   - HTML report artifact
 - [ ] Ensure all tests pass before merging (branch protection rule)
@@ -921,7 +1067,8 @@ Once you complete each phase and I review, here are commit messages to use:
 1. **Phase 1:** `feat: init monorepo with Vite, Express, TypeScript, and Docker`
 2. **Phase 2:** `feat: database schema and seed script`
 3. **Phase 3:** `feat: products API with filtering and sorting`
-4. **Phase 4:** `feat: shop page with product grid, filters, and responsive design`
+4. **Phase 4a:** `feat: app shell with routing, header, footer, and design tokens`
+4. **Phase 4b:** `feat: shop page with product grid, filters, and responsive design`
 5. **Phase 5:** `feat: product detail page with size, quantity, and add-to-cart`
 6. **Phase 6:** `feat: user authentication with signup, login, and sessions`
 7. **Phase 7:** `feat: auth pages (login, signup) and user context`
@@ -936,22 +1083,46 @@ Once you complete each phase and I review, here are commit messages to use:
 
 # Tech Stack Reference
 
+> Exact installed versions live in the **Current State** section at the top of
+> this file. Update that table, not this one, when a dependency changes.
+
 | Component | Technology |
 |-----------|-----------|
-| Frontend Framework | React 18 + TypeScript |
-| Frontend Build | Vite |
+| Frontend Framework | React 19 + TypeScript |
+| Frontend Build | Vite 8 |
 | Frontend Routing | React Router v6 |
 | Frontend Styling | Plain CSS (no Tailwind, no styled-components) |
 | Backend Framework | Express + TypeScript |
-| Database | PostgreSQL |
+| TS execution (dev) | `tsx` (not ts-node) |
+| Env loading | Node `--env-file` (no `dotenv` package) |
+| Database | PostgreSQL 16 |
 | Database Driver | pg (no ORM) |
 | Docker | Docker Compose |
-| Auth | bcrypt + express-session |
+| Auth | bcrypt + express-session + connect-pg-simple |
+| Linting | oxlint |
 | Fonts | Google Fonts (Space Grotesk, Inter) |
 | Colors | Warm gray (#F3F1EC), near-black (#212121), green (#1E5A3C) |
-| Testing (Part B) | Vitest, Playwright, pytest |
+| Testing (Part B) | Vitest, supertest, Playwright, axe, k6 |
 | CI/CD (Part B) | GitHub Actions |
 
 ---
 
-**Ready for Phase 1? Let me know once you've reviewed the plan!**
+# Conventions
+
+Decisions made once so they aren't re-litigated each phase:
+
+- **Money** is always integer cents, named `*_cents`. Format for display only at the edge.
+- **Shipping** is free at a $150+ subtotal, else a flat $10. No tax. Server computes it.
+- **Prices** are always recalculated server-side from the `products` table; never trust a client-supplied amount.
+- **Card data** never leaves the browser.
+- **Ownership checks** scope the SQL query by `user_id` and return 404, not 403.
+- **Env vars** load via Node's `--env-file=.env`; no `dotenv` dependency.
+- **`sold_out_sizes`** is a CSV string; filter with the delimiter-padded `LIKE` predicate.
+- **The seed is idempotent** — re-running `db:setup` must leave exactly 20 products with stable IDs.
+- **Dev requests** use relative `/api/...` paths through the Vite proxy, with `credentials: 'include'`.
+- **Every interactive element** gets a `data-testid`, because Part B depends on it.
+
+---
+
+**Next up: Phase 3 — Products API.** Phases 1 and 2 are verified against a live
+database, so the products endpoints have real data to query.

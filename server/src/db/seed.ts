@@ -30,6 +30,23 @@ const products = [
 ];
 
 async function seed() {
+  if (!process.env.DATABASE_URL) {
+    console.error('DATABASE_URL is not set. Copy .env.example to .env first.');
+    process.exit(1);
+  }
+
+  let client;
+  try {
+    client = await pool.connect();
+  } catch (error) {
+    console.error(
+      'Could not connect to Postgres. Is it running? Try: docker compose up -d'
+    );
+    console.error(error instanceof Error ? error.message : error);
+    await pool.end();
+    process.exit(1);
+  }
+
   try {
     // Read schema.sql
     const schemaPath = path.join(__dirname, 'schema.sql');
@@ -37,13 +54,24 @@ async function seed() {
 
     // Execute schema
     console.log('Creating tables...');
-    await pool.query(schema);
+    await client.query(schema);
     console.log('✓ Tables created');
 
-    // Insert products
+    // Reseeding is idempotent: running db:setup twice must still leave 20
+    // products, and product IDs must stay stable because the UI and the
+    // E2E tests reference /products/1.
+    //
+    // Everything referencing products goes too, so we don't leave orders
+    // pointing at order_items that CASCADE removed. `users` is deliberately
+    // untouched — accounts come from signup, not from the seed.
+    await client.query('BEGIN');
+    await client.query(
+      'TRUNCATE products, cart_items, order_items, orders RESTART IDENTITY CASCADE'
+    );
+
     console.log('Seeding products...');
     for (const product of products) {
-      await pool.query(
+      await client.query(
         `INSERT INTO products (name, team, league, kit_type, price_cents, primary_color, trim_color, sold_out_sizes)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
@@ -58,16 +86,20 @@ async function seed() {
         ]
       );
     }
+
+    await client.query('COMMIT');
     console.log(`✓ Seeded ${products.length} products`);
 
     // Verify
-    const result = await pool.query('SELECT COUNT(*) FROM products');
+    const result = await client.query('SELECT COUNT(*) FROM products');
     console.log(`✓ Database now has ${result.rows[0].count} products`);
-
-    await pool.end();
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Seed error:', error);
-    process.exit(1);
+    process.exitCode = 1;
+  } finally {
+    client.release();
+    await pool.end();
   }
 }
 
