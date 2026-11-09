@@ -16,8 +16,8 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 
 | | |
 |---|---|
-| **Done** | Phases 1, 2, 3, 4a (all verified end to end) |
-| **Next** | Phase 4b — Shop page (filters, sort, product grid) |
+| **Done** | Phases 1, 2, 3, 4a, 4b (all verified end to end) |
+| **Next** | Phase 5 — Product detail page |
 
 **Verified vs. assumed — read this before trusting any ✅ below:**
 
@@ -26,8 +26,10 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 - The server builds, boots, loads `.env`, and answers `GET /` and `GET /api/health` (`{"ok":true,"db":true}`). The Vite dev proxy is confirmed to reach Express.
 - Phase 3's products endpoints are **verified against real data**, including filter combinations, input validation, LIKE escaping, and a parameterized-query injection probe.
 - The app shell is live and checked in a real browser: routing, header, footer, API client, and the 404 paths.
-- **`ShopPage` and `ProductPage` are deliberate stubs.** They fetch real data and prove the wiring, but 4b and Phase 5 replace their bodies.
-- **Nothing in Phase 4b+ has been started.** Those checkboxes are plans, not results.
+- The shop page is complete: sidebar filters, search, sort, responsive grid, loading skeletons and an empty state, all driven by the URL.
+- **`ProductPage` is still a deliberate stub.** It fetches real data and handles 404, but Phase 5 replaces its body.
+- Phase 4b also finished **Phase 10's URL-state, loading and no-results tasks** early — see the strikethroughs there.
+- **Nothing in Phase 5+ has been started.** Those checkboxes are plans, not results.
 
 **Actual installed versions** (keep this table honest — it is the first thing a new contributor or agent reads):
 
@@ -425,7 +427,7 @@ Also verified beyond the checklist:
 
 ---
 
-## Phase 4b: Frontend — Shop Page
+## Phase 4b: Frontend — Shop Page ✅
 
 **Goal:** Build the product grid page with filters, search, and sorting (no cart or checkout yet).
 
@@ -435,34 +437,75 @@ Also verified beyond the checklist:
 - CSS grid and responsive layout
 
 **Tasks:**
-- [ ] Create `client/src/pages/ShopPage.tsx`
+- [x] Create `client/src/pages/ShopPage.tsx`
   - Breadcrumb (Home / Jerseys)
-  - Left sidebar: league chips (All, Premier League, La Liga, Serie A, Bundesliga, International), size pills (S, M, L, XL), kit checkboxes (Home, Away, Third, Retro), "Clear all filters" link
-  - Main area: title "All Jerseys", intro copy, result count ("9 jerseys"), sort dropdown (Featured, Price: Low to High, Price: High to Low)
+  - Left sidebar: search box, league chips, size pills, kit checkboxes, "Clear all filters"
+  - Main area: title, intro copy, result count, sort dropdown
   - Product grid: 4 columns on desktop, 2 on tablet, 1 on mobile
-- [ ] Create `client/src/components/ProductCard.tsx`
-  - Display product image (SVG jersey with primary/trim colors)
-  - Badge: **"New"** if created in last 7 days, or **"Retro"** if `kit_type === 'Retro'`, or **"Sold out"** if every size is in `sold_out_sizes`
-    - ⚠️ The old "Final few (< 3 of any size in stock)" rule was **removed** — no per-size stock count exists in the schema and none is being added. Don't reintroduce it without adding a stock model first.
-  - Show name, kit, league, price
-  - On hover, show quick-add size buttons (sold-out sizes grayed out with strikethrough)
-  - Quick-add buttons **navigate to the product detail page** for now. They do not add to cart — the cart doesn't exist until Phase 8. Wire them to `addItem()` there.
-- [ ] Create `client/src/components/JerseyImage.tsx` — renders SVG jersey shape filled with primary color, trim as accent stripe
-- [ ] Add data-testid to filter controls, product cards, sort dropdown
+  - Loading skeletons and a no-results empty state
+- [x] Create `client/src/components/ProductCard.tsx`
+  - SVG jersey image with primary/trim colors
+  - Badge priority **Sold out → Retro → New**: a shopper needs unavailability before anything else, and "Retro" describes the product better than "New" describes its listing date
+  - Name, kit, league, price
+  - Quick-add size buttons on hover, sold-out sizes struck through
+  - Quick-add navigates to `/products/:id?size=X` — the cart doesn't exist until Phase 8, and carrying the size lets Phase 5 preselect it
+- [x] Create `client/src/components/JerseyImage.tsx`
+- [x] Add data-testid to filter controls, product cards, sort dropdown
 
 **Files created or changed:**
 - `client/src/pages/ShopPage.tsx`
-- `client/src/components/ProductCard.tsx`
-- `client/src/components/JerseyImage.tsx`
+- `client/src/components/ProductCard.tsx`, `JerseyImage.tsx`
+- `client/src/styles/global.css` (shop, filter, card and empty-state styles)
+- `server/src/db/seed.ts` (backdated `created_at` — see below)
 
-**Done when:**
-- Shop page loads and displays all 20 products in a grid
-- Clicking a league chip filters products (e.g., "Premier League" shows ~5 products)
-- Search box filters by team name (type "Arsenal" → shows Arsenal home, away, etc.)
-- Sort dropdown changes order (Price: Low to High puts lowest-priced items first)
-- Breadcrumb is visible; header and footer still render (from 4a)
-- Grid is responsive: 4 cols desktop, 2 tablet, 1 mobile (test by resizing)
-- Sold-out sizes appear struck through on card hover
+> **Three decisions made while building this:**
+>
+> 1. **The URL is the only source of truth for filter state.** The plan put
+>    URL syncing in Phase 10, but 4a already *reads* params, so a second
+>    `useState` copy would desync the moment someone arrived via a header
+>    preset or hit the back button. Controls write to `setSearchParams`
+>    directly. **This completes Phase 10's first task early** — see the note
+>    in that phase.
+> 2. **The seed now backdates `created_at`.** Every product was seeded at
+>    `CURRENT_TIMESTAMP`, so a 7-day "New" rule marked 19 of 20 cards — a
+>    badge on everything is a badge on nothing. Each product carries a
+>    `days_ago` value; five are inside the window.
+> 3. **The card uses a stretched link, not a wrapping anchor.** Quick-add
+>    buttons are interactive, and nesting them inside the card's `<a>` would
+>    be invalid HTML and unusable by keyboard. `.product-card__link::after`
+>    covers the card instead; the size chips sit above it on `z-index: 1`.
+>
+> Also: `.product-card__sizes` is hover-revealed only inside
+> `@media (hover: hover)`, so touch devices — which have no hover — always
+> show the sizes rather than never showing them.
+
+**Done when:** ✅ verified in Chrome against the running stack
+- [x] Shop page displays all 20 products in a grid
+- [x] Clicking a league chip filters (Premier League → 7)
+- [x] Search box filters by team (`arsenal` → 2)
+- [x] Sort changes order (Price: Low to High puts the $85 kits first)
+- [x] Breadcrumb visible; header and footer still render
+- [x] Grid is responsive: 1 column base, 2 at ≥600px, 4 at ≥1100px
+- [x] Sold-out sizes struck through on card hover (Man United 1999 → S and L)
+
+Also verified beyond the checklist:
+
+- [x] Filters compose: `?league=Premier+League&size=S` → 5, correctly dropping the two PL kits with S sold out
+- [x] Chips toggle off when re-clicked, and "Clear all filters" only appears when something is set
+- [x] Empty state renders for a zero-result combination (`?league=Bundesliga&kit=Retro`)
+- [x] Badges are meaningful after the seed change: 5 New, 1 Retro
+- [x] White kits stay visible against the warm-gray card — the jersey body carries a faint outline stroke
+- [x] No app console errors (only Chrome-extension noise); oxlint clean
+
+> ⚠️ **Not verified in-browser:** the tablet/mobile column counts were
+> confirmed by reading the live CSSOM rules (1fr → 2 → 4), not by visually
+> resizing — the Chrome window was maximized and `resize_window` stopped
+> taking effect. Re-check visually during Phase 13's mobile pass.
+>
+> ⚠️ **Also unverified:** the sort `<select>`'s *write* path. Reading it from
+> the URL is confirmed, but macOS renders the dropdown as a native popup that
+> doesn't accept synthetic key events, so the `onChange` handler was never
+> fired by a real gesture. Worth an explicit Playwright assertion in B3.
 
 **Resume skill:** React components, API integration, CSS Grid, responsive design
 
@@ -778,14 +821,15 @@ Also verified beyond the checklist:
 - UX polish (loading states, empty states, no-results page)
 
 **Tasks:**
-- [ ] Update ShopPage to persist filter state in URL query params
-  - When filters change, update URL without full page reload (React Router)
-  - On page load, read query params and set initial filters
-  - Example: `/jerseys?league=Premier%20League&sort=price-asc`
+- [x] ~~Update ShopPage to persist filter state in URL query params~~ — **done in Phase 4b.**
+  Keeping filter state in both the URL and component state would have desynced
+  immediately, so 4b made the URL authoritative rather than adding a second copy
+  to remove later. `/jerseys?league=Premier+League&sort=price-asc` already works,
+  including back/forward.
 - [ ] Add search box to Header (global search)
   - On submit, navigate to `/jerseys?q=<query>` and clear other filters (or keep league?)
-- [ ] Add loading state to ShopPage (spinner while fetching)
-- [ ] Add "no results" message if filters return 0 products
+- [x] ~~Add loading state to ShopPage~~ — done in 4b (skeleton cards, not a spinner: they hold the grid's shape so the layout doesn't jump)
+- [x] ~~Add "no results" message if filters return 0 products~~ — done in 4b
 - [ ] Polish ProductCard: add hover shadow, smooth color transitions
 - [ ] Add smooth scroll behavior
 - [ ] Verify all touch targets are 44px minimum on mobile
@@ -1170,6 +1214,6 @@ Decisions made once so they aren't re-litigated each phase:
 
 ---
 
-**Next up: Phase 4b — Shop page.** The shell, routing and API client are in
-place, and query-param filtering already works end to end. 4b builds the
-sidebar filters, sort control and real product grid on top of it.
+**Next up: Phase 5 — Product detail page.** The shop page links to
+`/products/:id?size=X`, so the detail page should read that param and
+preselect the size.
