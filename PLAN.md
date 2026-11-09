@@ -16,8 +16,8 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 
 | | |
 |---|---|
-| **Done** | Phases 1, 2, 3, 4a, 4b, 5, 6, 7 (all verified end to end) |
-| **Next** | Phase 8 — Cart (API + drawer) |
+| **Done** | Phases 1, 2, 3, 4a, 4b, 5, 6, 7, 8 (all verified end to end) |
+| **Next** | Phase 9 — Checkout and orders |
 
 **Verified vs. assumed — read this before trusting any ✅ below:**
 
@@ -30,9 +30,10 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 - The product detail page is complete: gallery, size grid, quantity stepper, expandable sections.
 - **`useCart` is a placeholder** — nothing persists. Phase 8 replaces its body with a real `POST /api/cart`; the signature is meant to survive that.
 - Auth works end to end: server routes plus login/signup pages, an account menu, and `ProtectedRoute` gating checkout and orders.
-- **`useCart` is still a placeholder** and the cart badge is still hardcoded to 0. Phase 8 replaces both.
+- The cart is real: `/api/cart` CRUD, a slide-out drawer, optimistic updates, and server-side persistence across sessions.
+- **`server/src/money.ts` holds the shipping rule.** Phase 9 must import it rather than retyping the thresholds.
 - Phase 4b also finished **Phase 10's URL-state, loading and no-results tasks** early — see the strikethroughs there.
-- **Nothing in Phase 8+ has been started.** Those checkboxes are plans, not results.
+- **Nothing in Phase 9+ has been started.** Those checkboxes are plans, not results.
 
 **Actual installed versions** (keep this table honest — it is the first thing a new contributor or agent reads):
 
@@ -767,7 +768,7 @@ Also verified beyond the checklist:
 
 ---
 
-## Phase 8: Frontend & Backend — Cart
+## Phase 8: Frontend & Backend — Cart ✅
 
 **Goal:** Build the cart endpoint and UI — add/update/remove items, slide-out drawer, free shipping progress bar.
 
@@ -804,24 +805,85 @@ Also verified beyond the checklist:
 - [ ] Add data-testid to cart items, quantity steppers, remove buttons, checkout button, cart count badge
 
 **Files created or changed:**
-- `server/src/routes/cart.ts` (or extend products.ts)
-- `server/src/middleware/auth.ts` (export `requireAuth`)
-- `client/src/contexts/CartContext.tsx`
-- `client/src/components/CartDrawer.tsx`
-- `client/src/components/ShippingProgressBar.tsx`
-- `client/src/hooks/useCart.ts` (replace placeholder)
-- `client/src/components/Header.tsx` (add cart icon + drawer toggle)
-- `client/src/App.tsx` (add CartProvider)
+- `server/src/routes/cart.ts`, `server/src/money.ts` (**new** — the shipping rule, shared with Phase 9)
+- `server/src/types.ts` (`CartLine`, `Cart`), `server/src/app.ts`
+- `client/src/contexts/cartContext.ts` + `CartProvider.tsx`
+- `client/src/components/CartDrawer.tsx`, `ShippingProgressBar.tsx`
+- `client/src/components/Header.tsx`, `Layout.tsx`, `ProductCard.tsx`, `QuantityStepper.tsx`
+- `client/src/pages/ProductPage.tsx`, `client/src/api.ts`, `client/src/types.ts`, `client/src/App.tsx`
+- Deleted `client/src/hooks/useCart.ts` — the placeholder's callers now use the context
 
-**Done when:**
-- Logged in; visit `/products/1`; click a size and "Add to Cart" → cart count badge appears (shows 1)
-- Click header cart icon → drawer slides out; shows 1 item (Arsenal, size S, qty 1, $90)
-- Adjust quantity to 2 → subtotal updates to $180
-- Free shipping progress bar shows as complete (green) because $180 > $150
-- Add another product to cart → cart count shows 2, drawer shows 2 items
-- Click remove on one item → cart updates
-- Cart persists across refresh (session check)
-- Logout and login again → cart is still there (server-side persistence)
+> **Decisions taken during this phase** (the spec left all four open):
+>
+> 1. **Signed-out add → stash the intent, sign in, replay it.** The add is kept
+>    in `sessionStorage`, the shopper is sent to `/login` with the existing
+>    `state.from` convention, and on success the item is added and the drawer
+>    opens. Losing the click would be the easy option and a worse one.
+> 2. **A size that sells out while in the cart is flagged, not dropped.** The
+>    line shows struck through with a reason, is excluded from the totals, and
+>    the checkout button is disabled until it's removed. Silently deleting it
+>    looks like a bug to the shopper.
+> 3. **Mutations are optimistic with snapshot rollback.** The stepper responds
+>    on the next frame; a failure restores the previous cart and surfaces the
+>    error.
+> 4. **Quick-add on a product card now adds to the cart** rather than
+>    navigating to the product page, which is what 4b did as a placeholder.
+>
+> **Why every endpoint returns the whole cart:** the totals depend on the
+> entire cart — the shipping threshold especially — so a partial response
+> would force the client to recompute money, which the money rule forbids.
+> One shape also lets the client replace its state wholesale after any change.
+>
+> **One deliberate duplication:** the shipping rule exists in both
+> `server/src/money.ts` and `recomputeCart()` in `client/src/types.ts`. The
+> client copy is used *only* for the optimistic window and every server
+> response overwrites it. The two workspaces share no package, so this is the
+> cost of optimistic updates — both sites say so in comments. If they ever
+> need to stay in step beyond this, extract a shared workspace.
+>
+> **Two subtle bugs found and fixed while building:**
+> - **React StrictMode double-invokes effects**, so the first run consumed the
+>   pending add and POSTed while its cleanup marked it inactive — discarding
+>   the "open the drawer" step — and the second run re-fetched, racing the
+>   POST. Fixed with a `loadStartedFor` ref keyed to the user id.
+> - **`QuantityStepper` hardcoded its `data-testid`s**, so the product page's
+>   stepper and every cart line collided. They're now namespaced from the `id`
+>   prop (`cart-quantity-17-increase`), which Phase B3 will need.
+
+**Done when:** ✅ verified end to end
+- [x] Signed in, add from `/products/1` → badge appears
+- [x] Header cart icon opens the drawer with the item, size and price
+- [x] Quantity 1 → 2 updates the subtotal to $180
+- [x] Free shipping bar completes at $180 (wording changes too, not just colour)
+- [x] Second product → badge 3, two lines, subtotal $280
+- [x] Remove → cart empties, empty state shows
+- [x] Cart persists across a full page refresh
+- [x] Log out and back in → cart still there
+
+Also verified beyond the checklist:
+
+- [x] **API, by curl:** anonymous → 401; adding the same product+size increments rather than duplicating; repeated adds cap at 20; sold-out size → 400; unknown product → 404; bad size/quantity → 400; `PATCH {quantity: 0}` removes the line; unknown item id → 404
+- [x] **Cross-user isolation:** user B cannot PATCH or DELETE user A's cart row (404 both ways) and never sees it
+- [x] **Optimistic update proved:** the subtotal moved to $380 on the next animation frame, before any server reply
+- [x] **Rollback proved:** with the row deleted behind the UI's back, the optimistic change reverted to $280 and surfaced "Cart item not found"
+- [x] **Empty cart ships free**, not $10 — a flat fee on zero items would be absurd
+- [x] Signed out, the badge reads 0 and the previous session's cart is not rendered
+- [x] Sold-out line: struck through, stepper hidden, excluded from subtotal, checkout disabled with a reason
+- [x] Seed data restored and verified identical after testing; build and oxlint clean
+
+**Code review found five real defects, all fixed before merge:**
+
+| Defect | Why it mattered | Fix |
+|---|---|---|
+| A failed add was **completely invisible** | `setIsOpen(true)` ran only on success, but the drawer is the only place the error renders — and both call sites stay silent *because* they expect the drawer to report it. A sold-out quick-add did nothing at all. | Open the drawer on failure too |
+| Rollback restored an **unconfirmed** snapshot | Two overlapping changes to one line that both fail would roll back to the first one's guess, leaving the client permanently wrong | Roll back to the last server-confirmed cart (`confirmed` ref) |
+| The sequence guard **discarded valid responses** | It stopped mid-burst flicker but also threw away a late authoritative reply for an *unrelated* line, losing that update for good | Reconcile with a fresh `GET /api/cart` once the burst drains (`inFlight` counter) |
+| Cart drawer **didn't trap focus** | `role="dialog"`/`aria-modal` were set, but Tab walked straight out into the header and footer behind the backdrop | Mark the shell content `inert` while open — same mechanism `ExpandableSection` already uses |
+| Sold-out checked **two different ways** in one file | `loadCart` used the SQL predicate, `POST` used JS string splitting — a reader has to notice they're equivalent | Both now use the padded SQL predicate |
+
+Verified after the fixes: a stale-page quick-add of a newly sold-out size opens the
+drawer with "Size M is sold out"; three overlapping mutations across two lines leave
+the UI and server in exact agreement; `inert` covers the header but not the drawer.
 
 **Resume skill:** Cart state management, API calls, UI state syncing
 
@@ -1310,6 +1372,6 @@ Decisions made once so they aren't re-litigated each phase:
 
 ---
 
-**Next up: Phase 8 — Cart.** Everything it needs is in place: a signed-in user,
-`requireAuth` on the server, and a `useCart` placeholder whose signature was
-written to survive being swapped for the real thing.
+**Next up: Phase 9 — Checkout and orders.** The cart API already computes the
+exact money an order needs; import `server/src/money.ts` rather than retyping
+the shipping rule, and remember card data never reaches the server.

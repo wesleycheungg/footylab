@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+import { CartProvider } from './contexts/CartProvider';
 import { UserProvider } from './contexts/UserProvider';
 import LoginPage from './pages/LoginPage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -20,8 +21,11 @@ import SignupPage from './pages/SignupPage';
 export default function App() {
   return (
     <BrowserRouter>
+      {/* CartProvider sits inside UserProvider: it reacts to sign-in state
+          to load, clear, or replay a pending add. */}
       <UserProvider>
-        <Routes>
+        <CartProvider>
+          <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<ShopPage />} />
             <Route path="/jerseys" element={<ShopPage />} />
@@ -51,9 +55,10 @@ export default function App() {
               />
             </Route>
 
-            <Route path="*" element={<NotFoundPage />} />
-          </Route>
-        </Routes>
+              <Route path="*" element={<NotFoundPage />} />
+            </Route>
+          </Routes>
+        </CartProvider>
       </UserProvider>
     </BrowserRouter>
   );

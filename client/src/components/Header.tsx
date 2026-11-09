@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
+import { useCart } from '../contexts/cartContext';
 import AccountMenu from './AccountMenu';
 
 /**
@@ -11,11 +12,6 @@ const NAV_LINKS = [
   { label: 'Retro', to: '/jerseys?kit=Retro' },
   { label: 'New Arrivals', to: '/jerseys?sort=featured' },
 ];
-
-interface HeaderProps {
-  /** Hardcoded to 0 until CartContext lands in Phase 8. */
-  cartCount?: number;
-}
 
 /**
  * Makes two URLs comparable regardless of param order or whether spaces
@@ -30,8 +26,10 @@ function normalizeUrl(url: string): string {
   return query ? `${path}?${query}` : path;
 }
 
-export default function Header({ cartCount = 0 }: HeaderProps) {
+export default function Header() {
   const location = useLocation();
+  const { cart, openDrawer } = useCart();
+  const cartCount = cart.item_count;
 
   // NavLink can't be used here: it compares pathname only, so every preset
   // on /jerseys would highlight at once. Compare the query string too.
@@ -73,12 +71,14 @@ export default function Header({ cartCount = 0 }: HeaderProps) {
 
           <AccountMenu />
 
-          {/* Phase 8 replaces this with the cart drawer toggle. */}
-          <Link
-            to="/checkout"
+          <button
+            type="button"
             className="icon-button"
-            aria-label={`Cart, ${cartCount} items`}
-            data-testid="cart-link"
+            onClick={openDrawer}
+            aria-label={
+              cartCount === 1 ? 'Cart, 1 item' : `Cart, ${cartCount} items`
+            }
+            data-testid="cart-button"
           >
             <BagIcon />
             {cartCount > 0 && (
@@ -86,7 +86,7 @@ export default function Header({ cartCount = 0 }: HeaderProps) {
                 {cartCount}
               </span>
             )}
-          </Link>
+          </button>
         </div>
       </div>
 

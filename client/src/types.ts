@@ -31,6 +31,73 @@ export interface PublicUser {
   email: string;
 }
 
+/** A cart row joined to its product — mirrors the server's CartLine. */
+export interface CartLine {
+  /** cart_items.id — what PATCH and DELETE address. */
+  id: number;
+  product_id: number;
+  size: Size;
+  quantity: number;
+  name: string;
+  team: string;
+  league: string;
+  kit_type: KitType;
+  price_cents: number;
+  primary_color: string;
+  trim_color: string;
+  sold_out_sizes: string;
+  /** This size sold out after the item was added. */
+  unavailable: boolean;
+}
+
+/** Every cart endpoint returns this whole shape, not just the changed row. */
+export interface Cart {
+  items: CartLine[];
+  item_count: number;
+  has_unavailable: boolean;
+  subtotal_cents: number;
+  shipping_cents: number;
+  total_cents: number;
+}
+
+export const EMPTY_CART: Cart = {
+  items: [],
+  item_count: 0,
+  has_unavailable: false,
+  subtotal_cents: 0,
+  shipping_cents: 0,
+  total_cents: 0,
+};
+
+/**
+ * Mirrors server/src/money.ts. Used **only** to keep the drawer consistent
+ * during an optimistic update — every response replaces these numbers with
+ * the server's, which remain authoritative. Keep the two in step.
+ */
+export const FREE_SHIPPING_THRESHOLD_CENTS = 15_000;
+const FLAT_SHIPPING_CENTS = 1_000;
+
+export function recomputeCart(items: CartLine[]): Cart {
+  const subtotal = items.reduce(
+    (sum, line) =>
+      line.unavailable ? sum : sum + line.price_cents * line.quantity,
+    0
+  );
+  const shipping =
+    subtotal <= 0 || subtotal >= FREE_SHIPPING_THRESHOLD_CENTS
+      ? 0
+      : FLAT_SHIPPING_CENTS;
+
+  return {
+    items,
+    item_count: items.reduce((sum, line) => sum + line.quantity, 0),
+    has_unavailable: items.some((line) => line.unavailable),
+    subtotal_cents: subtotal,
+    shipping_cents: shipping,
+    total_cents: subtotal + shipping,
+  };
+}
+
 export interface ProductFilters {
   team?: string;
   league?: string;

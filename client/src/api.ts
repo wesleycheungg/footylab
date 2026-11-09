@@ -1,4 +1,4 @@
-import type { Product, ProductFilters, PublicUser } from './types';
+import type { Cart, Product, ProductFilters, PublicUser, Size } from './types';
 
 /**
  * All requests use relative /api/... paths. In dev the Vite proxy forwards
@@ -114,4 +114,39 @@ export function logout(): Promise<void> {
 
 export function getCurrentUser(): Promise<PublicUser> {
   return request<PublicUser>('/auth/me');
+}
+
+/* Cart -------------------------------------------------------------------
+ * Every one of these returns the entire cart, including freshly computed
+ * totals, so callers replace their state wholesale rather than patching it.
+ */
+
+export function getCart(): Promise<Cart> {
+  return request<Cart>('/cart');
+}
+
+export function addToCart(
+  productId: number,
+  size: Size,
+  quantity = 1
+): Promise<Cart> {
+  return request<Cart>('/cart', {
+    method: 'POST',
+    body: JSON.stringify({ productId, size, quantity }),
+  });
+}
+
+/** A quantity of 0 removes the line. */
+export function updateCartItem(
+  itemId: number,
+  quantity: number
+): Promise<Cart> {
+  return request<Cart>(`/cart/${itemId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ quantity }),
+  });
+}
+
+export function removeCartItem(itemId: number): Promise<Cart> {
+  return request<Cart>(`/cart/${itemId}`, { method: 'DELETE' });
 }

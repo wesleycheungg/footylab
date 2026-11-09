@@ -3,7 +3,10 @@ interface QuantityStepperProps {
   onChange: (value: number) => void;
   min?: number;
   max?: number;
+  /** Also namespaces the test ids — the drawer renders one per line. */
   id?: string;
+  /** Describes which item this controls, for screen readers. */
+  label?: string;
 }
 
 export default function QuantityStepper({
@@ -12,8 +15,10 @@ export default function QuantityStepper({
   min = 1,
   max = 20,
   id = 'quantity',
+  label,
 }: QuantityStepperProps) {
   const clamp = (next: number) => Math.min(max, Math.max(min, next));
+  const suffix = label ? ` for ${label}` : '';
 
   return (
     <div className="stepper">
@@ -22,8 +27,8 @@ export default function QuantityStepper({
         className="stepper__button"
         onClick={() => onChange(clamp(value - 1))}
         disabled={value <= min}
-        aria-label="Decrease quantity"
-        data-testid="quantity-decrease"
+        aria-label={`Decrease quantity${suffix}`}
+        data-testid={`${id}-decrease`}
       >
         −
       </button>
@@ -38,7 +43,7 @@ export default function QuantityStepper({
         inputMode="numeric"
         pattern="[0-9]*"
         value={value}
-        aria-label="Quantity"
+        aria-label={`Quantity${suffix}`}
         onChange={(event) => {
           const digits = event.target.value.replace(/\D/g, '');
           if (digits === '') return;
@@ -47,7 +52,7 @@ export default function QuantityStepper({
         onBlur={(event) => {
           if (event.target.value.replace(/\D/g, '') === '') onChange(min);
         }}
-        data-testid="quantity-input"
+        data-testid={`${id}-input`}
       />
 
       <button
@@ -55,8 +60,8 @@ export default function QuantityStepper({
         className="stepper__button"
         onClick={() => onChange(clamp(value + 1))}
         disabled={value >= max}
-        aria-label="Increase quantity"
-        data-testid="quantity-increase"
+        aria-label={`Increase quantity${suffix}`}
+        data-testid={`${id}-increase`}
       >
         +
       </button>
