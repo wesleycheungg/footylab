@@ -20,6 +20,12 @@ export interface CartContextValue {
   addItem: (productId: number, size: Size, quantity?: number) => Promise<void>;
   updateItem: (itemId: number, quantity: number) => Promise<void>;
   removeItem: (itemId: number) => Promise<void>;
+  /**
+   * Re-reads the cart from the server. Checkout calls this after placing
+   * an order, because the order transaction empties the cart server-side
+   * and the badge would otherwise keep showing the old count.
+   */
+  refresh: () => Promise<void>;
   dismissError: () => void;
 }
 

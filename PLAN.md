@@ -16,8 +16,8 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 
 | | |
 |---|---|
-| **Done** | Phases 1, 2, 3, 4a, 4b, 5, 6, 7, 8 (all verified end to end) |
-| **Next** | Phase 9 — Checkout and orders |
+| **Done** | Phases 1–9 (all verified end to end) |
+| **Next** | Phase 10 — Search, filters and UI polish |
 
 **Verified vs. assumed — read this before trusting any ✅ below:**
 
@@ -31,9 +31,9 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 - **`useCart` is a placeholder** — nothing persists. Phase 8 replaces its body with a real `POST /api/cart`; the signature is meant to survive that.
 - Auth works end to end: server routes plus login/signup pages, an account menu, and `ProtectedRoute` gating checkout and orders.
 - The cart is real: `/api/cart` CRUD, a slide-out drawer, optimistic updates, and server-side persistence across sessions.
-- **`server/src/money.ts` holds the shipping rule.** Phase 9 must import it rather than retyping the thresholds.
+- Checkout and orders are live: transactional order creation, order history and detail. `server/src/money.ts` is the shipping rule's only home — both the cart and orders import it.
 - Phase 4b also finished **Phase 10's URL-state, loading and no-results tasks** early — see the strikethroughs there.
-- **Nothing in Phase 9+ has been started.** Those checkboxes are plans, not results.
+- **Nothing in Phase 10+ has been started.** Those checkboxes are plans, not results. Note Phase 10's first three tasks were already completed back in 4b.
 
 **Actual installed versions** (keep this table honest — it is the first thing a new contributor or agent reads):
 
@@ -889,7 +889,7 @@ the UI and server in exact agreement; `inert` covers the header but not the draw
 
 ---
 
-## Phase 9: Frontend & Backend — Checkout & Orders
+## Phase 9: Frontend & Backend — Checkout & Orders ✅
 
 **Goal:** Build the checkout flow, order creation, and order history.
 
@@ -947,23 +947,70 @@ the UI and server in exact agreement; `inert` covers the header but not the draw
 - [ ] Add data-testid to shipping form inputs, card inputs, place-order button, order items, etc.
 
 **Files created or changed:**
-- `client/src/pages/CheckoutPage.tsx`
-- `client/src/pages/OrderConfirmationPage.tsx`
-- `client/src/pages/OrderHistoryPage.tsx`
-- `client/src/pages/OrderDetailPage.tsx`
-- `server/src/routes/orders.ts`
-- `client/src/App.tsx` (add checkout routes)
-- `client/src/contexts/CartContext.tsx` (add clear cart function)
+- `server/src/routes/orders.ts`, `server/src/validation.ts` (**new** — shared `EMAIL_PATTERN` + `requiredString`)
+- `server/src/types.ts` (`OrderLine`, `OrderSummary`, `OrderDetail`), `server/src/app.ts`
+- `server/src/routes/auth.ts` (now imports the shared email pattern)
+- `client/src/pages/CheckoutPage.tsx`, `OrderHistoryPage.tsx`, `OrderDetailPage.tsx`
+- `client/src/api.ts`, `client/src/types.ts`, `client/src/App.tsx`
+- `client/src/contexts/cartContext.ts` + `CartProvider.tsx` (added `refresh()`)
+- Deleted `client/src/pages/PlaceholderPage.tsx` — nothing references it now
 
-**Done when:**
-- Logged in with items in cart; click checkout button from cart drawer
-- Checkout page shows cart summary and form
-- Fill out shipping and card info; click "Place Order"
-- Redirected to order confirmation page; shows order number and items
-- Visit `/orders` (order history) → see the order listed
-- Click order → see full details (shipping address, items, total)
-- Cart is now empty (cart count badge = 0)
-- Logout and login → visit `/orders` → order is still there
+> **Deviation: one order page, not two.** The plan listed
+> `OrderConfirmationPage` and `OrderDetailPage` separately, but they differ
+> only in a heading and one button. Two files would have been the same
+> component twice, drifting apart the moment either changed. Checkout
+> navigates to `/orders/:id` with `state.justPlaced` to get the confirmation
+> framing.
+>
+> **Why `refresh()` rather than a `clearCart()`:** the order transaction
+> empties the cart server-side, so the client should re-read the truth rather
+> than assume what the server did. A local clear would be wrong the moment an
+> order partially failed.
+>
+> **Transaction details worth knowing:**
+> - `SELECT ... FOR UPDATE OF ci` locks the user's cart rows, so two
+>   simultaneous checkouts can't both read the same cart and produce two
+>   orders from one set of items.
+> - Sold-out sizes are re-checked **inside** the transaction. The drawer's
+>   warning is a courtesy; this is the check that actually prevents it.
+> - `order_items.price_cents` is copied, not referenced, so an order still
+>   shows what was paid after the product's price changes.
+> - Totals come from `money.ts` — the same rule the cart uses, not a retyped
+>   threshold.
+
+**Done when:** ✅ verified end to end in the browser
+- [x] Signed in with items in cart; checkout reachable from the drawer
+- [x] Checkout page shows the cart summary and the form
+- [x] Fill shipping and card info, place order
+- [x] Redirected to the confirmation showing order number, items and total
+- [x] `/orders` lists the order
+- [x] Opening it shows shipping address, items and total
+- [x] Cart badge is empty afterwards
+- [x] Log out and back in → the order is still there
+
+Also verified beyond the checklist:
+
+- [x] **Card data never leaves the browser — proved at the wire.** `window.fetch` was
+      patched to capture the `POST /api/orders` body; it contained exactly
+      `{name, email, address, city, state, zip}` and nothing matching
+      `card|cvv|4242|expiry`.
+- [x] **Rollback is real:** with a size sold out mid-checkout the order is
+      refused, the cart is left intact, and **no orphan order row** is created
+- [x] **Price locking:** raising a product's price after an order leaves the
+      order showing what was actually paid
+- [x] Empty cart → 400 "Your cart is empty"; missing/invalid shipping → 400
+- [x] Another user's order → 404 from both the list and the detail endpoint
+- [x] `/orders/abc` → 400, `/orders/999` → 404, anonymous → 401
+- [x] Free shipping applies at $150+ and the flat $10 below it
+- [x] Order history is a real `<table>` with `th[scope]`, a caption, and a
+      per-row anchor — keyboard reachable and openable in a new tab
+- [x] Checkout with an empty cart shows an empty state instead of a dead form
+- [x] Build and oxlint clean
+
+> **One UX bug found and fixed during testing:** field errors persisted after
+> the shopper corrected them, until the next submit — the form kept
+> complaining about something already fixed. Errors now clear per field on
+> edit (verified: 9 errors → 8 after fixing one field).
 
 **Resume skill:** Form validation, database transactions, order processing
 
@@ -1372,6 +1419,6 @@ Decisions made once so they aren't re-litigated each phase:
 
 ---
 
-**Next up: Phase 9 — Checkout and orders.** The cart API already computes the
-exact money an order needs; import `server/src/money.ts` rather than retyping
-the shipping rule, and remember card data never reaches the server.
+**Next up: Phase 10 — Search, filters and polish.** Much of it is already done
+(URL state, loading skeletons, the no-results state all landed in 4b), so what
+remains is the header's global search and a polish pass.
