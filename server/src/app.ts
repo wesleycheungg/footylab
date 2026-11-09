@@ -1,6 +1,9 @@
 import express from 'express';
+import helmet from 'helmet';
 import pool from './db/pool.js';
+import { createSessionMiddleware } from './middleware/auth.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import authRouter from './routes/auth.js';
 import productsRouter from './routes/products.js';
 
 /**
@@ -10,7 +13,22 @@ import productsRouter from './routes/products.js';
 export function createApp() {
   const app = express();
 
-  app.use(express.json());
+  if (process.env.NODE_ENV === 'production') {
+    // Required for `secure` cookies to be set when TLS terminates upstream;
+    // without it Express sees plain HTTP and silently drops the cookie.
+    app.set('trust proxy', 1);
+  }
+
+  app.use(
+    helmet({
+      // The API serves JSON only, and the Vite dev server sets its own CSP
+      // for the app; helmet's default policy here would just block the dev
+      // client without protecting anything.
+      contentSecurityPolicy: false,
+    })
+  );
+  app.use(express.json({ limit: '100kb' }));
+  app.use(createSessionMiddleware());
 
   app.get('/', (_req, res) => {
     res.json({ ok: true });
@@ -29,6 +47,7 @@ export function createApp() {
     res.status(db ? 200 : 503).json({ ok: true, db });
   });
 
+  app.use('/api/auth', authRouter);
   app.use('/api/products', productsRouter);
 
   // Order matters: unmatched /api routes 404 as JSON, then the terminal
