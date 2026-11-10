@@ -7,7 +7,9 @@
     "server"
   ],
   "scripts": {
-    "dev": "npm run dev --workspaces",
+    "dev": "concurrently --names api,web --prefix-colors green,cyan --kill-others-on-fail \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run dev --workspace server",
+    "dev:web": "npm run dev --workspace client",
     "build": "npm run build --workspaces",
     "start": "npm run start --workspace server",
     "db:setup": "npm run db:setup --workspace server",
@@ -15,5 +17,8 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7"
   }
 }
