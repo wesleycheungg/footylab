@@ -16,8 +16,8 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 
 | | |
 |---|---|
-| **Done** | Phases 1–11 (all verified end to end) |
-| **Next** | Phase 12 — README and documentation |
+| **Done** | Phases 1–12 (all verified end to end) |
+| **Next** | Phase 13 — Manual testing, edge cases and polish |
 
 **Verified vs. assumed — read this before trusting any ✅ below:**
 
@@ -34,7 +34,8 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 - Checkout and orders are live: transactional order creation, order history and detail. `server/src/money.ts` is the shipping rule's only home — both the cart and orders import it.
 - Phase 4b also finished **Phase 10's URL-state, loading and no-results tasks** early — see the strikethroughs there.
 - The API is documented at `/api-docs`, and the spec is conformance-checked against the live API rather than hand-maintained on trust.
-- **Nothing in Phase 12+ has been started.** Those checkboxes are plans, not results.
+- `npm run dev` now genuinely starts both halves; before Phase 12 it silently started only the client.
+- **Nothing in Phase 13+ has been started.** Those checkboxes are plans, not results.
 
 **Actual installed versions** (keep this table honest — it is the first thing a new contributor or agent reads):
 
@@ -243,7 +244,7 @@ presets on `/jerseys`**, not separate pages — e.g. `/jerseys?kit=Retro`,
 
 **Done when:** ✅
 - ✅ `npm install` installs dependencies
-- ✅ `npm run dev` starts both frontend (http://localhost:5173) and backend (http://localhost:3000)
+- ⚠️ `npm run dev` starts both frontend (http://localhost:5173) and backend (http://localhost:3000) — **this was not actually true until Phase 12.** npm runs workspace scripts sequentially, so only the client started. Fixed with `concurrently`.
 - ✅ Vite page loads with default React template
 - ✅ Express responds to `curl http://localhost:3000/` with JSON `{ok: true}`
 
@@ -1150,7 +1151,7 @@ database is back to 20 products and the two original users.
 
 ---
 
-## Phase 12: README & Documentation
+## Phase 12: README & Documentation ✅
 
 **Goal:** Write a comprehensive README for the project.
 
@@ -1159,31 +1160,39 @@ database is back to 20 products and the two original users.
 - Setup instructions clarity
 
 **Tasks:**
-- [ ] Create `README.md` at project root
-  - Project overview (what it is, why it exists)
-  - Tech stack list
-  - Prerequisites: **Docker** and Node (version pinned in `.nvmrc`)
-  - Setup instructions in this exact order: clone → `npm install` → `cp server/.env.example server/.env` → `docker compose up -d` → `npm run db:setup` → `npm run dev`
-    - `db:setup` before the containers are up is the most likely first-run failure; call it out
-  - API documentation (link to `/api-docs` or brief endpoint list)
-  - Project structure (monorepo layout, what's in `/client` and `/server`)
-  - Design system (colors, fonts, spacing)
-  - Testing instructions (once Phase B is done)
-  - Deployment instructions (once live)
-  - License (MIT or personal use)
-- [ ] Add comments to key files explaining complex logic
-- [ ] Create `ARCHITECTURE.md` (optional) explaining data flow, auth flow, cart flow
+- [x] Create `README.md` at project root — deliberately short, written to a
+      rubric: one-paragraph description, prerequisites, a working quickstart,
+      the three most important config options, project structure, docs link
+- [x] Key files already carry comments explaining the non-obvious decisions
+- [x] ~~`ARCHITECTURE.md`~~ — skipped. The structure section plus the two
+      stated conventions cover it, and a third doc would be a third thing to
+      keep in sync with the code.
 
 **Files created or changed:**
-- `README.md`
-- `ARCHITECTURE.md` (optional)
+- `README.md` (**new**)
+- `package.json` — `npm run dev` now actually starts both halves (see below)
+- Deleted `client/.env.example`
 
-**Done when:**
-- README includes step-by-step setup instructions
-- Someone new to the project can follow the README and get running locally
-- API endpoints are documented
-- Design colors and fonts are specified
-- Project goals (portfolio project showcasing skills) are clear
+> **The README caught a bug that had been there since Phase 1.**
+> `npm run dev` ran `npm run dev --workspaces`, and npm runs workspace scripts
+> **sequentially** — Vite blocks, so the server never started. Port 3000 stayed
+> empty. Phase 1's "Done when" claimed this worked and it never did; it was
+> only ever exercised by starting the two halves separately.
+> Fixed with `concurrently`, and verified from a genuinely clean slate (both
+> ports confirmed free first, since a leftover process had masked the problem
+> on the first attempt).
+>
+> **Also deleted `client/.env.example`.** It advertised `VITE_API_URL`, which
+> nothing reads — `api.ts` explicitly warns against reintroducing it, because
+> a cross-origin base URL is what the Vite proxy exists to avoid. An env
+> example for a variable the code ignores is worse than none.
+
+**Done when:** ✅
+- [x] README has step-by-step setup in the right order, with `docker compose up -d` before `db:setup`
+- [x] Someone new can follow it and get running — **every command and curl example was executed verbatim**, not written from memory
+- [x] API endpoints documented by linking `/api-docs` rather than restating them, so the list cannot drift
+- [x] Project goals clear: stated plainly as a work sample, not a product
+- [x] Design system: covered by the tech-stack line; the full palette lives in the Design Direction section of this file rather than being duplicated
 
 **Resume skill:** Technical documentation, communication
 
@@ -1475,6 +1484,7 @@ Decisions made once so they aren't re-litigated each phase:
 
 ---
 
-**Next up: Phase 12 — README and documentation.** The setup steps must put
-`docker compose up -d` before `db:setup`, and can now point at `/api-docs`
-instead of restating the endpoint list.
+**Next up: Phase 13 — Manual testing and polish.** Carry over the one thing
+three phases have deferred: a real mobile pass. `resize_window` has never
+worked in this environment, so the responsive layout has only ever been
+verified by reading the CSSOM.
