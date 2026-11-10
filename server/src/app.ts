@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import helmet from 'helmet';
+import { load } from 'js-yaml';
+import swaggerUi from 'swagger-ui-express';
 import pool from './db/pool.js';
 import { createSessionMiddleware } from './middleware/auth.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
@@ -7,6 +12,18 @@ import authRouter from './routes/auth.js';
 import cartRouter from './routes/cart.js';
 import ordersRouter from './routes/orders.js';
 import productsRouter from './routes/products.js';
+
+/**
+ * The spec lives next to the source as YAML so it stays readable and
+ * diffable. One directory up from this module resolves to `server/` whether
+ * running from `src` under tsx or from the compiled `dist`, so the file does
+ * not need copying into the build.
+ */
+function loadOpenApiSpec(): object {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const specPath = join(here, '..', 'openapi.yaml');
+  return load(readFileSync(specPath, 'utf-8')) as object;
+}
 
 /**
  * Builds the Express app without binding a port, so tests (Phase B2) can
@@ -48,6 +65,20 @@ export function createApp() {
     }
     res.status(db ? 200 : 503).json({ ok: true, db });
   });
+
+  // Mounted before the /api routers, but on its own path — Express matches
+  // mount paths on segment boundaries, so "/api-docs" never collides with
+  // the "/api" JSON 404 handler below.
+  app.use(
+    '/api-docs',
+    swaggerUi.serve,
+    swaggerUi.setup(loadOpenApiSpec(), {
+      customSiteTitle: 'FootyLab API',
+      // "Try it out" has to send the session cookie or every authenticated
+      // endpoint would 401 from the docs page.
+      swaggerOptions: { withCredentials: true, persistAuthorization: true },
+    })
+  );
 
   app.use('/api/auth', authRouter);
   app.use('/api/cart', cartRouter);
