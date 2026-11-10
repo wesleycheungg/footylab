@@ -1,0 +1,711 @@
+openapi: 3.0.3
+
+info:
+  title: FootyLab API
+  version: 1.0.0
+  description: |
+    The API behind FootyLab, a portfolio football-jersey shop.
+
+    **Money** is always an integer number of cents, in fields suffixed
+    `_cents`. Totals are calculated by the server and never accepted from a
+    client: free shipping at a subtotal of $150 (15000) or more, otherwise a
+    flat $10 (1000). There is no tax.
+
+    **Authentication** is a session cookie (`footylab.sid`), set by
+    `/auth/signup` and `/auth/login`. Browsers send it automatically; `curl`
+    needs `-c`/`-b` to store and replay a cookie jar.
+
+    **Card data is never accepted.** `POST /orders` takes shipping details
+    only. There is no payment processing here, so card numbers have no reason
+    to reach the server and are deliberately not part of any schema.
+
+    **Ownership checks return 404, not 403.** A cart item or order belonging
+    to another account is indistinguishable from one that does not exist, so
+    the API never confirms that someone else's record is there.
+
+servers:
+  - url: http://localhost:3000/api
+    description: Local development
+
+tags:
+  - name: Health
+  - name: Auth
+  - name: Products
+  - name: Cart
+  - name: Orders
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: footylab.sid
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: A message safe to show the user.
+      example:
+        error: You must be signed in to do that
+
+    Product:
+      type: object
+      required:
+        [
+          id,
+          name,
+          team,
+          league,
+          kit_type,
+          price_cents,
+          primary_color,
+          trim_color,
+          sold_out_sizes,
+          created_at,
+        ]
+      properties:
+        id: { type: integer, example: 1 }
+        name: { type: string, example: Arsenal Home }
+        team: { type: string, example: Arsenal }
+        league: { type: string, example: Premier League }
+        kit_type:
+          type: string
+          enum: [Home, Away, Third, Retro]
+        price_cents:
+          type: integer
+          description: Always greater than zero.
+          example: 9000
+        primary_color: { type: string, example: '#DC0000' }
+        trim_color: { type: string, example: '#FFFFFF' }
+        sold_out_sizes:
+          type: string
+          description: >
+            Comma-separated sizes, e.g. `S,L`. Empty when everything is in
+            stock. A deliberate simplification: there is no per-size stock
+            count in this project, so a join table would add a layer without
+            adding information.
+          example: 'S,L'
+        created_at: { type: string, format: date-time }
+
+    CartLine:
+      type: object
+      required:
+        [
+          id,
+          product_id,
+          size,
+          quantity,
+          name,
+          team,
+          league,
+          kit_type,
+          price_cents,
+          primary_color,
+          trim_color,
+          sold_out_sizes,
+          unavailable,
+        ]
+      properties:
+        id:
+          type: integer
+          description: The cart item id — what PATCH and DELETE address.
+          example: 17
+        product_id: { type: integer, example: 1 }
+        size: { type: string, enum: [S, M, L, XL] }
+        quantity: { type: integer, minimum: 1, maximum: 20, example: 2 }
+        name: { type: string, example: Arsenal Home }
+        team: { type: string, example: Arsenal }
+        league: { type: string, example: Premier League }
+        kit_type: { type: string, enum: [Home, Away, Third, Retro] }
+        price_cents: { type: integer, example: 9000 }
+        primary_color: { type: string, example: '#DC0000' }
+        trim_color: { type: string, example: '#FFFFFF' }
+        sold_out_sizes: { type: string, example: '' }
+        unavailable:
+          type: boolean
+          description: >
+            This size sold out after the item was added. The line is kept and
+            flagged rather than deleted, is excluded from the totals, and
+            blocks checkout until it is removed.
+
+    Cart:
+      type: object
+      description: >
+        Returned in full by every cart endpoint, not just the row that
+        changed. The totals depend on the whole cart — the shipping threshold
+        especially — so a partial response would force the client to
+        recalculate money.
+      required:
+        [
+          items,
+          item_count,
+          has_unavailable,
+          subtotal_cents,
+          shipping_cents,
+          total_cents,
+        ]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CartLine' }
+        item_count:
+          type: integer
+          description: Sum of quantities, not the number of lines.
+          example: 2
+        has_unavailable: { type: boolean, example: false }
+        subtotal_cents:
+          type: integer
+          description: Excludes any line flagged `unavailable`.
+          example: 18000
+        shipping_cents:
+          type: integer
+          description: 0 at or above 15000, otherwise 1000. An empty cart ships free.
+          example: 0
+        total_cents: { type: integer, example: 18000 }
+
+    PublicUser:
+      type: object
+      required: [id, email]
+      properties:
+        id: { type: integer, example: 1 }
+        email: { type: string, format: email, example: test@example.com }
+
+    Credentials:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Trimmed and lowercased, so addresses differing only by case are the same account.
+          example: test@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: password123
+
+    ShippingDetails:
+      type: object
+      description: >
+        The entire accepted body of `POST /orders`. Card fields are not
+        listed because they are not accepted — see the note in the API
+        description.
+      required: [name, email, address, city, state, zip]
+      properties:
+        name: { type: string, maxLength: 200, example: Test Person }
+        email: { type: string, format: email, example: test@example.com }
+        address: { type: string, maxLength: 300, example: 1 Example Street }
+        city: { type: string, maxLength: 200, example: Austin }
+        state: { type: string, maxLength: 100, example: TX }
+        zip: { type: string, maxLength: 20, example: '78701' }
+
+    Order:
+      type: object
+      required:
+        [
+          id,
+          user_id,
+          subtotal_cents,
+          shipping_cents,
+          total_cents,
+          shipping_name,
+          shipping_email,
+          shipping_address,
+          shipping_city,
+          shipping_state,
+          shipping_zip,
+          created_at,
+        ]
+      properties:
+        id: { type: integer, example: 1 }
+        user_id: { type: integer, example: 1 }
+        subtotal_cents:
+          type: integer
+          description: Equals the sum of `price_cents * quantity` across the order's items.
+          example: 9000
+        shipping_cents: { type: integer, example: 1000 }
+        total_cents: { type: integer, example: 10000 }
+        shipping_name: { type: string, example: Test Person }
+        shipping_email: { type: string, example: test@example.com }
+        shipping_address: { type: string, example: 1 Example Street }
+        shipping_city: { type: string, example: Austin }
+        shipping_state: { type: string, example: TX }
+        shipping_zip: { type: string, example: '78701' }
+        created_at: { type: string, format: date-time }
+
+    OrderLine:
+      type: object
+      required:
+        [
+          id,
+          product_id,
+          size,
+          quantity,
+          price_cents,
+          name,
+          team,
+          league,
+          kit_type,
+          primary_color,
+          trim_color,
+        ]
+      properties:
+        id: { type: integer, example: 1 }
+        product_id: { type: integer, example: 1 }
+        size: { type: string, enum: [S, M, L, XL] }
+        quantity: { type: integer, example: 1 }
+        price_cents:
+          type: integer
+          description: >
+            Copied at order time, not referenced. An order keeps showing what
+            was actually paid after the product's price changes.
+          example: 9000
+        name: { type: string, example: Arsenal Home }
+        team: { type: string, example: Arsenal }
+        league: { type: string, example: Premier League }
+        kit_type: { type: string, enum: [Home, Away, Third, Retro] }
+        primary_color: { type: string, example: '#DC0000' }
+        trim_color: { type: string, example: '#FFFFFF' }
+
+    OrderSummary:
+      type: object
+      required:
+        [id, created_at, subtotal_cents, shipping_cents, total_cents, item_count]
+      properties:
+        id: { type: integer, example: 1 }
+        created_at: { type: string, format: date-time }
+        subtotal_cents: { type: integer, example: 9000 }
+        shipping_cents: { type: integer, example: 1000 }
+        total_cents: { type: integer, example: 10000 }
+        item_count:
+          type: integer
+          description: Sum of quantities across the order.
+          example: 1
+
+    OrderDetail:
+      allOf:
+        - $ref: '#/components/schemas/Order'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/OrderLine' }
+
+  responses:
+    Unauthorized:
+      description: No valid session cookie.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: You must be signed in to do that }
+    NotFound:
+      description: No such record, or it belongs to another account.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    BadRequest:
+      description: The request body or query string failed validation.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    TooManyRequests:
+      description: Rate limit exceeded — 20 attempts per 15 minutes across signup and login combined.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: Too many attempts. Try again in a few minutes. }
+    ServerError:
+      description: Unexpected failure. The real cause is logged server-side and not returned.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: Internal server error }
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Service and database health
+      description: CI polls this before starting end-to-end tests, so it reports database reachability rather than merely that the process is up.
+      security: []
+      responses:
+        '200':
+          description: The database is reachable.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, db]
+                properties:
+                  ok: { type: boolean, example: true }
+                  db: { type: boolean, example: true }
+        '503':
+          description: The process is running but the database is not reachable.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  db: { type: boolean, example: false }
+
+  /auth/signup:
+    post:
+      tags: [Auth]
+      summary: Create an account and start a session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Credentials' }
+      responses:
+        '201':
+          description: Account created; the session cookie is set.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: footylab.sid; HttpOnly; SameSite=Lax; Path=/
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicUser' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409':
+          description: That email already has an account.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: An account with that email already exists }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Start a session
+      description: >
+        A wrong password and an unknown email return the identical response,
+        and an unknown email is still compared against a dummy hash so both
+        take the same time. Neither the body nor the timing reveals whether an
+        address is registered.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Credentials' }
+      responses:
+        '200':
+          description: Signed in; the session cookie is set and its id is rotated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicUser' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: Email or password incorrect.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: Email or password is incorrect }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: End the session
+      description: Destroys the stored session and clears the cookie. Safe to call when already signed out.
+      security: []
+      responses:
+        '204':
+          description: Session ended. No body.
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: The signed-in user
+      responses:
+        '200':
+          description: The current user.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicUser' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /products:
+    get:
+      tags: [Products]
+      summary: List products
+      description: >
+        Filters combine with AND. Unknown values for `kit`, `size` or `sort`
+        are rejected rather than ignored, so a typo cannot silently return
+        everything. Capped at 50 results; there are only 20 products, so there
+        is no pagination.
+      security: []
+      parameters:
+        - name: team
+          in: query
+          schema: { type: string }
+          description: Case-insensitive exact match.
+          example: Arsenal
+        - name: league
+          in: query
+          schema: { type: string }
+          description: Case-insensitive exact match.
+          example: Premier League
+        - name: kit
+          in: query
+          schema: { type: string, enum: [Home, Away, Third, Retro] }
+        - name: size
+          in: query
+          schema: { type: string, enum: [S, M, L, XL] }
+          description: Returns products that are *available* in this size.
+        - name: q
+          in: query
+          schema: { type: string }
+          description: >
+            Case-insensitive substring match on name, team or league. LIKE
+            wildcards are escaped, so `%` matches a literal percent sign.
+          example: arsenal
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [featured, price-asc, price-desc]
+            default: featured
+          description: Every ordering uses `id` as a tiebreaker, so results are stable.
+      responses:
+        '200':
+          description: Matching products.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Product' }
+        '400':
+          description: An unknown `kit`, `size` or `sort` value.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                error: 'Invalid sort "cheapest". Expected one of: featured, price-asc, price-desc'
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /products/{id}:
+    get:
+      tags: [Products]
+      summary: One product
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+          example: 1
+      responses:
+        '200':
+          description: The product.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '400':
+          description: The id was not numeric.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: 'Invalid product id "abc"' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /cart:
+    get:
+      tags: [Cart]
+      summary: The signed-in user's cart
+      responses:
+        '200':
+          description: The whole cart, including totals.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cart' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      tags: [Cart]
+      summary: Add an item
+      description: >
+        Adding a product and size already in the cart increments the existing
+        line rather than creating a second one, capped at 20 per line.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, size]
+              properties:
+                productId: { type: integer, example: 1 }
+                size: { type: string, enum: [S, M, L, XL] }
+                quantity:
+                  type: integer
+                  minimum: 1
+                  maximum: 20
+                  default: 1
+      responses:
+        '201':
+          description: Added; the whole updated cart is returned.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cart' }
+        '400':
+          description: Invalid body, or the size is sold out.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: Size S is sold out }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: No such product.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: Product 9999 not found }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /cart/{itemId}:
+    parameters:
+      - name: itemId
+        in: path
+        required: true
+        schema: { type: integer }
+        description: A `CartLine.id`, not a product id.
+        example: 17
+    patch:
+      tags: [Cart]
+      summary: Change a line's quantity
+      description: A quantity of 0 removes the line.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: { type: integer, minimum: 0, maximum: 20, example: 2 }
+      responses:
+        '200':
+          description: Updated; the whole cart is returned.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cart' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    delete:
+      tags: [Cart]
+      summary: Remove a line
+      responses:
+        '200':
+          description: Removed; the whole cart is returned.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cart' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /orders:
+    get:
+      tags: [Orders]
+      summary: The signed-in user's orders
+      description: Most recent first.
+      responses:
+        '200':
+          description: Order summaries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/OrderSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      tags: [Orders]
+      summary: Place an order from the current cart
+      description: >
+        Runs in a single transaction: the cart rows are locked, prices are
+        read from the products table, the order and its items are written, and
+        the cart is emptied. If anything fails, nothing is written — no order
+        row survives with the cart still full.
+
+        The request body is shipping details only. Card fields are not
+        accepted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShippingDetails' }
+      responses:
+        '201':
+          description: Order created and the cart emptied.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '400':
+          description: >
+            Empty cart, missing or invalid shipping details, or an item whose
+            size sold out before checkout.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                emptyCart:
+                  value: { error: Your cart is empty }
+                soldOut:
+                  value: { error: 'No longer available: Arsenal Home (M)' }
+                invalidShipping:
+                  value: { error: Enter a valid email address }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /orders/{id}:
+    get:
+      tags: [Orders]
+      summary: One order, with its items
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+          example: 1
+      responses:
+        '200':
+          description: The order and the items it contains.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderDetail' }
+        '400':
+          description: The id was not numeric.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: 'Invalid order id "abc"' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+security:
+  - sessionCookie: []

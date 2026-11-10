@@ -16,8 +16,8 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 
 | | |
 |---|---|
-| **Done** | Phases 1–10 (all verified end to end) |
-| **Next** | Phase 11 — OpenAPI / Swagger spec |
+| **Done** | Phases 1–11 (all verified end to end) |
+| **Next** | Phase 12 — README and documentation |
 
 **Verified vs. assumed — read this before trusting any ✅ below:**
 
@@ -33,7 +33,8 @@ FootyLab is a clean, minimal jersey shop selling authentic club and national tea
 - The cart is real: `/api/cart` CRUD, a slide-out drawer, optimistic updates, and server-side persistence across sessions.
 - Checkout and orders are live: transactional order creation, order history and detail. `server/src/money.ts` is the shipping rule's only home — both the cart and orders import it.
 - Phase 4b also finished **Phase 10's URL-state, loading and no-results tasks** early — see the strikethroughs there.
-- **Nothing in Phase 11+ has been started.** Those checkboxes are plans, not results.
+- The API is documented at `/api-docs`, and the spec is conformance-checked against the live API rather than hand-maintained on trust.
+- **Nothing in Phase 12+ has been started.** Those checkboxes are plans, not results.
 
 **Actual installed versions** (keep this table honest — it is the first thing a new contributor or agent reads):
 
@@ -1087,7 +1088,7 @@ rather than making the desktop UI chunky.
 
 ---
 
-## Phase 11: OpenAPI / Swagger Spec
+## Phase 11: OpenAPI / Swagger Spec ✅
 
 **Goal:** Document the API in OpenAPI 3.0 format.
 
@@ -1097,25 +1098,53 @@ rather than making the desktop UI chunky.
 - Tools like Swagger UI
 
 **Tasks:**
-- [ ] Create `server/openapi.yaml` (or `.json`)
-  - Define all endpoints (auth, products, cart, orders)
-  - Include request bodies and response schemas
-  - Document error responses (400, 401, 404, 500)
-  - Add example requests and responses
-- [ ] Install `swagger-ui-express` package
-- [ ] Serve Swagger UI at `/api-docs` (GET `/api-docs` → Swagger page)
-- [ ] Ensure spec is accurate and examples match real API behavior
+- [x] Create `server/openapi.yaml` — OpenAPI 3.0.3, **14 operations, 11 schemas**, covering health, auth, products, cart and orders
+  - Error responses (400, 401, 404, 409, 429, 500, 503) as shared components
+  - Examples on every error, taken from the real messages
+- [x] Install `swagger-ui-express`
+- [x] Serve Swagger UI at `/api-docs`
+- [x] **Ensure spec is accurate** — see the conformance check below
 
 **Files created or changed:**
-- `server/openapi.yaml`
-- `server/src/index.ts` (add swagger-ui middleware)
-- `server/package.json` (add swagger-ui-express)
+- `server/openapi.yaml` (**new**)
+- `server/src/app.ts` (swagger middleware — not `index.ts`, which only listens; routes live in `app.ts`)
+- `server/package.json` (`swagger-ui-express`, `js-yaml`)
 
-**Done when:**
-- Visit `http://localhost:3000/api-docs` → Swagger UI loads
-- All endpoints listed with correct paths, methods, parameters
-- Request/response examples are visible and accurate
-- Clicking "Try it out" on an endpoint and executing a request works
+> **The spec documents the behaviour that is easy to get wrong**, not just
+> the happy paths: money is integer cents and server-calculated; card data is
+> never accepted by any schema; ownership checks return 404 rather than 403;
+> login's response and timing don't reveal whether an email is registered;
+> and every cart endpoint returns the *whole* cart because the totals depend
+> on it.
+>
+> **Dependency note:** `js-yaml` resolved to 5.x, which ships its own types,
+> so the `@types/js-yaml` package installed alongside it was removed — a
+> stale 4.x type package would have shadowed the real ones.
+>
+> **Mount order:** `/api-docs` is registered before the routers but on its
+> own path. Express matches mount paths on segment boundaries, so it never
+> collides with the `/api` JSON 404 handler — verified.
+
+**Done when:** ✅ all verified
+- [x] `http://localhost:3000/api-docs` loads Swagger UI, titled "FootyLab API"
+- [x] All 14 operations listed with correct paths, methods and parameters
+- [x] Request/response examples visible and accurate
+- [x] **"Try it out" executes a real request** — ran `GET /health` from the docs page; it called `http://localhost:3000/api/health` and rendered `{"ok": true, "db": true}`
+
+**Spec accuracy was machine-checked, not eyeballed.** A throwaway script called
+every documented operation against the running API and compared the status code
+and the response's property names with what the spec promises:
+
+- **23/24 checks passed**; the one failure was a bug in the *script* (it compared
+  a `CartLine` against the `Cart` schema), not in the spec
+- The three nested schemas the first pass missed were then checked directly:
+  `CartLine` 13/13, `OrderLine` 11/11, `OrderSummary` 6/6 — exact matches, no
+  undocumented fields and nothing declared that the API doesn't return
+- Error strings in the spec are the literal ones the server returns, e.g.
+  `Invalid sort "cheapest". Expected one of: featured, price-asc, price-desc`
+
+Test accounts created by the conformance run were removed afterwards; the
+database is back to 20 products and the two original users.
 
 **Resume skill:** API documentation, OpenAPI specification
 
@@ -1446,5 +1475,6 @@ Decisions made once so they aren't re-litigated each phase:
 
 ---
 
-**Next up: Phase 11 — OpenAPI spec.** Every endpoint the spec must describe is
-built and verified: auth, products, cart, orders, health.
+**Next up: Phase 12 — README and documentation.** The setup steps must put
+`docker compose up -d` before `db:setup`, and can now point at `/api-docs`
+instead of restating the endpoint list.
