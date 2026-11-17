@@ -946,6 +946,11 @@ ul {
   padding: var(--space-5);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  /* Fieldsets default to `min-inline-size: min-content`, so a row that cannot
+     compress pushes the whole box past its grid column instead of shrinking
+     with it. Shipping has a three-field row and payment only two, which is why
+     the two boxes disagreed on width. */
+  min-inline-size: 0;
 }
 
 .checkout__row {
@@ -1353,6 +1358,10 @@ ul {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  /* A grid or flex item floors at its min-content width, and an <input>'s
+     min-content is its default 20-character size — wider than the track when
+     three sit side by side. Without this they refuse to compress. */
+  min-width: 0;
 }
 
 .field__label {
