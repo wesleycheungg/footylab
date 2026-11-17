@@ -1,0 +1,39 @@
+{
+  "framework": null,
+  "buildCommand": "npm run build --workspaces",
+  "outputDirectory": "client/dist",
+  "functions": {
+    "api/index.mjs": {
+      "includeFiles": "{server/openapi.yaml,node_modules/swagger-ui-dist/**}"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/api-docs",
+      "destination": "/api"
+    },
+    {
+      "source": "/api-docs/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    }
+  ]
+}
