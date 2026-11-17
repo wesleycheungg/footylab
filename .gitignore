@@ -1,8 +1,19 @@
 node_modules
 dist
 build
+# Every env file, not just the two exact names: `vercel env pull` writes
+# server/.env.production and .vercel/.env.production.local, both of which
+# contain a live connection string.
+.env.*
 .env
-.env.local
+!.env.example
+
+# Contains .env.production.local plus the local build output.
+.vercel
+
+# Local scratch notes — not part of the repo's documentation.
+*.local.md
+
 .DS_Store
 *.log
 .idea
