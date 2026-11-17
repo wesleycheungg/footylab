@@ -7,8 +7,27 @@ as a dependency and nothing is sold. It exists so the decisions behind it can be
 read: a Postgres schema with real constraints, session auth with bcrypt,
 transactional order creation, optimistic cart updates with rollback, and an
 OpenAPI spec that is checked against the running API rather than maintained on
-trust. If you want to see how the pieces fit, the fastest route is to run it
-locally — about two minutes — and then read `server/src/routes/`.
+trust. If you want to see how the pieces fit, click through the live demo
+below, or run it locally — about two minutes — and then read
+`server/src/routes/`.
+
+## Live demo
+
+**<https://footylab-demo.vercel.app>**
+
+The whole app, deployed on Vercel: the React client as static assets, the
+Express API as a single serverless function behind `/api`, and managed Postgres
+behind that. Two links worth having:
+
+- Browsable API docs: <https://footylab-demo.vercel.app/api-docs>
+- Health check: <https://footylab-demo.vercel.app/api/health> → `{"ok":true,"db":true}`
+
+The read-only `curl` examples further down work against it too — swap
+`localhost:3000` for `footylab-demo.vercel.app`.
+
+It is a public demo on one shared database, so sign up with a throwaway email
+and treat anything you create there as visible and disposable. Checkout creates
+a real order row; it does not collect payment details and nothing is charged.
 
 ## Prerequisites
 
@@ -100,10 +119,11 @@ Router 6, no UI or CSS framework.
 
 ## Documentation
 
-- **API reference:** <http://localhost:3000/api-docs> (Swagger UI) or
-  [`server/openapi.yaml`](server/openapi.yaml)
+- **Live app:** <https://footylab-demo.vercel.app>
+- **API reference:** <https://footylab-demo.vercel.app/api-docs> (Swagger UI,
+  live) or <http://localhost:3000/api-docs> when running locally; the spec
+  itself is [`server/openapi.yaml`](server/openapi.yaml)
 - **Build log and decisions:** [`PLAN.md`](PLAN.md)
-- **Full docs:** _TODO — link once published_
 
 ## Licence
 
