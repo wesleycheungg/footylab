@@ -2,40 +2,18 @@
 
 A full-stack football-jersey shop built as a work sample: browse and filter a
 catalogue, sign up, add to a cart that survives logout, and check out into a
-real order. It is not a product and not a library — there is nothing to install
-as a dependency and nothing is sold. It exists so the decisions behind it can be
-read: a Postgres schema with real constraints, session auth with bcrypt,
-transactional order creation, optimistic cart updates with rollback, and an
-OpenAPI spec that is checked against the running API rather than maintained on
-trust. If you want to see how the pieces fit, click through the live demo
-below, or run it locally — about two minutes — and then read
-`server/src/routes/`.
+real order. Nothing is sold and nothing is charged.
 
-## Live demo
-
-**<https://footylab-demo.vercel.app>**
-
-The whole app, deployed on Vercel: the React client as static assets, the
-Express API as a single serverless function behind `/api`, and managed Postgres
-behind that. Two links worth having:
-
-- Browsable API docs: <https://footylab-demo.vercel.app/api-docs>
-- Health check: <https://footylab-demo.vercel.app/api/health> → `{"ok":true,"db":true}`
-
-The read-only `curl` examples further down work against it too — swap
-`localhost:3000` for `footylab-demo.vercel.app`.
+**Live demo: <https://footylab-demo.vercel.app>** — [API docs](https://footylab-demo.vercel.app/api-docs)
+· [health check](https://footylab-demo.vercel.app/api/health)
 
 It is a public demo on one shared database, so sign up with a throwaway email
-and treat anything you create there as visible and disposable. Checkout creates
-a real order row; it does not collect payment details and nothing is charged.
-
-## Prerequisites
-
-- **Node 26** (`.nvmrc`; `engines` requires ≥22)
-- **Docker** — runs PostgreSQL 16; nothing else needs installing
-- macOS or Linux
+and treat anything you create there as disposable.
 
 ## Quickstart
+
+Needs **Node 26** (`.nvmrc`; `engines` requires ≥22) and **Docker** for
+PostgreSQL 16.
 
 ```bash
 git clone https://github.com/wesleycheungg/footylab.git
@@ -49,44 +27,22 @@ npm run db:setup                       # creates tables, seeds 20 jerseys
 npm run dev                            # API :3000, web app :5173
 ```
 
-Open <http://localhost:5173>. The API is on <http://localhost:3000>, and the
-browsable docs are at <http://localhost:3000/api-docs>.
+Open <http://localhost:5173>. API docs are at <http://localhost:3000/api-docs>.
 
-`db:setup` is idempotent — re-run it any time to reset the catalogue to its
-seeded state. It will not delete your accounts.
-
-Checking the stack without the browser:
-
-```bash
-# Is the service up and can it reach the database?
-curl localhost:3000/api/health
-# {"ok":true,"db":true}
-
-# Filters combine; an unknown value is rejected rather than ignored
-curl 'localhost:3000/api/products?league=La%20Liga&size=M&sort=price-asc'
-
-# Sign up, then read the session back using a cookie jar
-curl -c jar -X POST localhost:3000/api/auth/signup \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"you@example.com","password":"password123"}'
-
-curl -b jar localhost:3000/api/auth/me
-# {"id":3,"email":"you@example.com"}
-```
+`db:setup` is idempotent — re-run it to reset the catalogue. It will not delete
+your accounts.
 
 ## Configuration
 
-All server configuration is environment variables in `server/.env`, loaded by
-Node's built-in `--env-file` (there is no `dotenv` dependency). The client needs
-no configuration: it calls relative `/api` paths, which the Vite dev server
-proxies to the API, so the browser sees one origin and session cookies work
-without CORS.
+Server config is environment variables in `server/.env`, loaded by Node's
+built-in `--env-file`. The client needs none: it calls relative `/api` paths,
+which Vite proxies to the API, so session cookies work without CORS.
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/footylab` | Matches `docker-compose.yml`. The only required variable. |
-| `SESSION_SECRET` | `change-me-in-production` | Signs session cookies. The server **refuses to start** in production if it is unset, rather than falling back to a guessable key. |
-| `PORT` | `3000` | API port. Change it and you must change the proxy target in `client/vite.config.ts` too. |
+| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/footylab` | The only required variable. |
+| `SESSION_SECRET` | `change-me-in-production` | Signs session cookies. The server refuses to start in production if unset. |
+| `PORT` | `3000` | Change it and you must change the proxy target in `client/vite.config.ts` too. |
 
 ## Project structure
 
@@ -105,10 +61,10 @@ client/          React 19 + Vite, plain CSS
 PLAN.md          the build plan, phase by phase, with what was verified
 ```
 
-Two conventions worth knowing before reading the code. Money is always an
-integer number of cents in a `*_cents` field, and totals are calculated by the
-server only. Ownership checks scope the SQL query by `user_id` and return 404
-rather than 403, so the API never confirms that another account's record exists.
+Two conventions worth knowing: money is always an integer number of cents in a
+`*_cents` field and totals are calculated server-side only; ownership checks
+scope the SQL by `user_id` and return 404 rather than 403, so the API never
+confirms another account's record exists.
 
 ## Tech stack
 
@@ -116,14 +72,6 @@ TypeScript throughout. **Server:** Node 26, Express 4, PostgreSQL 16 via `pg`
 (no ORM — the SQL is the point), `express-session` with `connect-pg-simple`,
 `bcrypt`, `helmet`, `express-rate-limit`. **Client:** React 19, Vite 8, React
 Router 6, no UI or CSS framework.
-
-## Documentation
-
-- **Live app:** <https://footylab-demo.vercel.app>
-- **API reference:** <https://footylab-demo.vercel.app/api-docs> (Swagger UI,
-  live) or <http://localhost:3000/api-docs> when running locally; the spec
-  itself is [`server/openapi.yaml`](server/openapi.yaml)
-- **Build log and decisions:** [`PLAN.md`](PLAN.md)
 
 ## Licence
 
